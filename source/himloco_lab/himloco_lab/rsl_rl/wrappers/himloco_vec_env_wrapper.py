@@ -10,13 +10,13 @@ from __future__ import annotations
 import gymnasium as gym
 import torch
 
-from isaaclab.envs import ManagerBasedRLEnv
+from himloco_lab.envs import HimlocoManagerBasedRLEnv
 from ..env.vec_env import VecEnv
 
 class HimlocoVecEnvWrapper(VecEnv):
     """Wraps around Isaac Lab environment for HimLoco RSL-RL.
     
-    This wrapper adapts Isaac Lab ManagerBasedRLEnv to the interface required by 
+    This wrapper adapts Isaac Lab HimlocoManagerBasedRLEnv to the interface required by 
     HimLoco's custom RSL-RL implementation.
     
     Key features:
@@ -29,26 +29,26 @@ class HimlocoVecEnvWrapper(VecEnv):
         This class must be the last wrapper in the wrapper chain.
     
     Args:
-        env: The Isaac Lab ManagerBasedRLEnv environment.
+        env: The Isaac Lab HimlocoManagerBasedRLEnv environment.
         history_length: Number of historical time steps to stack with current observation.
             0 = only current step, 1 = current + 1 past step, etc.
         privileged_history_length: Number of historical time steps to stack with current privileged observation.
             0 = only current step, 1 = current + 1 past step, etc.
     
     Raises:
-        ValueError: When the environment is not an instance of ManagerBasedRLEnv.
+        ValueError: When the environment is not an instance of HimlocoManagerBasedRLEnv.
     """
 
     def __init__(
         self, 
-        env: ManagerBasedRLEnv,
+        env: HimlocoManagerBasedRLEnv,
         history_length: int = 0,
         privileged_history_length: int = 0,
     ):
         """Initialize the wrapper.
         
         Args:
-            env: Isaac Lab ManagerBasedRLEnv environment.
+            env: Isaac Lab HimlocoManagerBasedRLEnv environment.
             history_length: Number of historical time steps to stack with current observation.
                 0 = only current step (num_obs = num_one_step_obs)
                 1 = current + 1 past step (num_obs = num_one_step_obs * 2)
@@ -57,9 +57,9 @@ class HimlocoVecEnvWrapper(VecEnv):
                 Same interpretation as history_length.
         """
         # check that input is valid
-        if not isinstance(env.unwrapped, ManagerBasedRLEnv):
+        if not isinstance(env.unwrapped, HimlocoManagerBasedRLEnv):
             raise ValueError(
-                "The environment must be inherited from ManagerBasedRLEnv. "
+                "The environment must be inherited from HimlocoManagerBasedRLEnv. "
                 f"Environment type: {type(env)}"
             )
         
@@ -67,13 +67,13 @@ class HimlocoVecEnvWrapper(VecEnv):
         if not hasattr(env.unwrapped, "observation_manager"):
             raise ValueError(
                 "The environment must have an observation_manager. "
-                "ManagerBasedRLEnv requires observation_manager to be configured."
+                "HimlocoManagerBasedRLEnv requires observation_manager to be configured."
             )
         # check that action manager exists
         if not hasattr(env.unwrapped, "action_manager"):
             raise ValueError(
                 "The environment must have an action_manager. "
-                "ManagerBasedRLEnv requires action_manager to be configured."
+                "HimlocoManagerBasedRLEnv requires action_manager to be configured."
             )
         
         # initialize the wrapper
@@ -216,12 +216,12 @@ class HimlocoVecEnvWrapper(VecEnv):
         """
         return self.privileged_obs_history_buf
 
-    def compute_termination_observations(self, env_ids: torch.Tensor, current_privileged_obs: torch.Tensor) -> torch.Tensor | None:
+    def compute_termination_observations(self, env_ids: torch.Tensor, obs_before_reset: torch.Tensor) -> torch.Tensor | None:
         """This method extracts the privileged observations for environments that just terminated.
         
         Args:
             env_ids: Indices of environments that terminated.
-            current_privileged_obs: Current single-step privileged observations from environment.
+            obs_before_reset: observations from environment before reset after action.
         
         Returns:
             Privileged observations for terminated environments.
@@ -230,7 +230,7 @@ class HimlocoVecEnvWrapper(VecEnv):
         if len(env_ids) == 0:
             return torch.zeros(0, self.num_one_step_privileged_obs, device=self.device)
         
-        termination_obs = current_privileged_obs[env_ids]
+        termination_obs = obs_before_reset[env_ids]
         
         return termination_obs
 
@@ -257,7 +257,7 @@ class HimlocoVecEnvWrapper(VecEnv):
             termination_privileged_obs: Privileged obs for terminated environments
         """
         # execute step in Isaac Lab environment (no action clipping, managed by environment)
-        obs_dict, rewards, terminated, truncated, infos = self.env.step(actions)
+        obs_dict, obs_before_reset, rewards, terminated, truncated, infos = self.env.step(actions)
         
         # compute dones for compatibility with HimLoco RSL-RL
         dones = (terminated | truncated).to(dtype=torch.long)
@@ -295,7 +295,7 @@ class HimlocoVecEnvWrapper(VecEnv):
             current_privileged_obs = obs_dict["critic"]
             # Compute termination observations before updating buffer
             self._termination_privileged_obs = self.compute_termination_observations(
-                self._termination_ids, current_privileged_obs
+                self._termination_ids, obs_before_reset["critic"]
             )
             # Update history buffer
             if self.privileged_history_length > 0:
