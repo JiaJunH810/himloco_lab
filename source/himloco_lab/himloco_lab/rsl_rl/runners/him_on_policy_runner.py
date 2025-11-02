@@ -165,7 +165,10 @@ class HIMOnPolicyRunner:
                     next_critic_obs[termination_ids] = termination_privileged_obs.clone().detach()
 
                     self.alg.process_env_step(rewards, dones, infos, next_critic_obs)
-                
+                    # print("+++++++++++++++++++++++++")
+                    # print(obs[0])
+                    # print(next_critic_obs[0, :self.env.num_one_step_obs])
+                    # print("+++++++++++++++++++++++++")
                     if self.log_dir is not None:
                         # Book keeping
                         if 'episode' in infos:

@@ -195,7 +195,7 @@ class CommandsCfg:
     base_velocity = mdp.UniformLevelVelocityCommandCfg(
         asset_name="robot",
         resampling_time_range=(10.0, 10.0),
-        rel_standing_envs=0.1,
+        # rel_standing_envs=0.1,
         debug_vis=True,
         heading_command=True,
         ranges=mdp.UniformLevelVelocityCommandCfg.Ranges(
@@ -236,10 +236,9 @@ class ObservationsCfg:
         )
         last_action = ObsTerm(func=mdp.last_action, clip=(-100, 100))
 
-        def __post_init__(self):
-            # self.history_length = 5
-            self.enable_corruption = True
-            self.concatenate_terms = True
+        # def __post_init__(self):
+        #     self.enable_corruption = True
+        #     self.concatenate_terms = True
 
     # observation groups
     policy: PolicyCfg = PolicyCfg()
@@ -261,7 +260,8 @@ class ObservationsCfg:
         )
 
         # def __post_init__(self):
-        #     self.history_length = 5
+        #     self.enable_corruption = True
+        #     self.concatenate_terms = True
 
     # privileged observations
     critic: CriticCfg = CriticCfg()
@@ -311,7 +311,7 @@ class RewardsCfg:
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names=".*_foot"),
             "target_height": -0.2,
-            "command_name": "base_velocity",
+            # "command_name": "base_velocity",
         }
     )
 
@@ -471,5 +471,5 @@ class RobotPlayEnvCfg(RobotEnvCfg):
         self.commands.base_velocity.heading_command = False
         self.commands.base_velocity.rel_standing_envs = 0.0
         self.commands.base_velocity.ranges = mdp.UniformLevelVelocityCommandCfg.Ranges(
-            lin_vel_x=(1, 1), lin_vel_y=(0, 0), ang_vel_z=(-0, 0), heading=(-0, 0)
+            lin_vel_x=(2, 2), lin_vel_y=(0, 0), ang_vel_z=(-0, 0), heading=(-0, 0)
         )
