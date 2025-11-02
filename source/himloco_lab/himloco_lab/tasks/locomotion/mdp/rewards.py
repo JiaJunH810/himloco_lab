@@ -13,6 +13,7 @@ from isaaclab.managers import RewardTermCfg as RewTerm
 
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
+    from himloco_lab.envs import HimlocoManagerBasedRLEnv
 
 """
 Joint penalties.
@@ -75,6 +76,9 @@ def joint_position_penalty(
     reward = torch.linalg.norm((asset.data.joint_pos - asset.data.default_joint_pos), dim=1)
     return torch.where(torch.logical_or(cmd > 0.0, body_vel > velocity_threshold), reward, stand_still_scale * reward)
 
+def smoothness(env: HimlocoManagerBasedRLEnv) -> torch.Tensor:
+    """Penalize the rate of change of the actions using L2 squared kernel."""
+    return torch.sum(torch.square(env.action_manager.action - env.action_manager.action*2 + env.pre_pre_action), dim=1)
 
 """
 Feet rewards.

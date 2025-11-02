@@ -23,37 +23,46 @@ from himloco_lab.tasks.locomotion import mdp
 
 COBBLESTONE_ROAD_CFG = terrain_gen.TerrainGeneratorCfg(
     size=(8.0, 8.0),
-    border_width=20.0,
-    num_rows=10,
-    num_cols=20,
-    horizontal_scale=0.1,
-    vertical_scale=0.005,
+    border_width=25.0,
+    num_rows=10,  # number of difficulty levels
+    num_cols=20,  # number of terrain types
+    horizontal_scale=0.1,  # [m] grid resolution
+    vertical_scale=0.005,  # [m] height scale
     slope_threshold=0.75,
     difficulty_range=(0.0, 1.0),
     use_cache=False,
-    sub_terrains={
-        "random_rough": terrain_gen.HfRandomUniformTerrainCfg(
-            proportion=0.1, noise_range=(0.01, 0.1), noise_step=0.01, border_width=0.1
-        ),
+    sub_terrains={     
         "hf_pyramid_slope": terrain_gen.HfPyramidSlopedTerrainCfg(
-            proportion=0.15, slope_range=(0.0, 1.0), platform_width=2.0, border_width=0.1
+            proportion=0.1, 
+            slope_range=(0.0, 0.4),  
+            platform_width=3.0,  
+            border_width=0.0,
         ),
-        "hf_pyramid_slope_inv": terrain_gen.HfInvertedPyramidSlopedTerrainCfg(
-            proportion=0.15, slope_range=(0.0, 1.0), platform_width=2.0, border_width=0.1
+        "random_rough": terrain_gen.HfRandomUniformTerrainCfg(
+            proportion=0.2, 
+            noise_range=(0.01, 0.08),  
+            noise_step=0.005,  
+            border_width=0.2, 
         ),
         "pyramid_stairs": terrain_gen.MeshPyramidStairsTerrainCfg(
             proportion=0.3,
-            step_height_range=(0.05, 0.3),
-            step_width=0.3,
-            platform_width=2.0,
-            border_width=0.2,
+            step_height_range=(0.05, 0.23),  # 0.05 + 0.18 * difficulty
+            step_width=0.30, 
+            platform_width=3.0, 
+            border_width=0.0,  
         ),
         "pyramid_stairs_inv": terrain_gen.MeshInvertedPyramidStairsTerrainCfg(
             proportion=0.3,
-            step_height_range=(0.05, 0.3),
-            step_width=0.3,
-            platform_width=2.0,
-            border_width=0.2,
+            step_height_range=(0.05, 0.23),  
+            step_width=0.30,
+            platform_width=3.0,
+            border_width=0.0,  
+        ),
+        "hf_pyramid_slope_inv": terrain_gen.HfInvertedPyramidSlopedTerrainCfg(
+            proportion=0.1, 
+            slope_range=(0.0, 0.4),  
+            platform_width=3.0,
+            border_width=0.0,  
         ),
     },
 )
@@ -302,10 +311,12 @@ class RewardsCfg:
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names=".*_foot"),
             "target_height": -0.2,
+            "command_name": "base_velocity",
         }
     )
 
     action_rate = RewTerm(func=mdp.action_rate_l2, weight=-0.01)
+    smoothness = RewTerm(func=mdp.smoothness, weight=-0.01)
     # joint_torques = RewTerm(func=mdp.joint_torques_l2, weight=-2e-4)
     # joint_vel = RewTerm(func=mdp.joint_vel_l2, weight=-0.001)
     
@@ -453,11 +464,12 @@ class RobotEnvCfg(ManagerBasedRLEnvCfg):
 class RobotPlayEnvCfg(RobotEnvCfg):
     def __post_init__(self):
         super().__post_init__()
-        self.scene.num_envs = 32
+        self.scene.num_envs = 64
         # self.scene.terrain.terrain_generator.num_rows = 4
         # self.scene.terrain.terrain_generator.num_cols = 4
         self.scene.terrain.terrain_generator.curriculum = True
         self.commands.base_velocity.heading_command = False
+        self.commands.base_velocity.rel_standing_envs = 0.0
         self.commands.base_velocity.ranges = mdp.UniformLevelVelocityCommandCfg.Ranges(
             lin_vel_x=(1, 1), lin_vel_y=(0, 0), ang_vel_z=(-0, 0), heading=(-0, 0)
         )

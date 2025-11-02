@@ -15,6 +15,7 @@ class HimlocoManagerBasedRLEnv(ManagerBasedRLEnv):
             **kwargs: Additional keyword arguments (e.g., env_cfg_entry_point from gym.register).
         """
         super().__init__(cfg, render_mode=render_mode, **kwargs)
+        self._pre_pre_action = torch.zeros((self.num_envs, self.action_manager.total_action_dim), device=self.device)
 
     def step(self, action: torch.Tensor) -> tuple[Dict[str, torch.Tensor], Dict[str, torch.Tensor], torch.Tensor, torch.Tensor, torch.Tensor, Dict[str, Any]]:
         """Execute one time-step of the environment's dynamics and reset terminated environments.
@@ -23,9 +24,9 @@ class HimlocoManagerBasedRLEnv(ManagerBasedRLEnv):
 
         1. Process the actions.
         2. Perform physics stepping.
-        3. Perform rendering if gui is enabled.
-        4. Update the environment counters and compute the rewards and terminations.
-        5. Capture observations before reset.
+        3. Capture observations before reset.
+        4. Perform rendering if gui is enabled.
+        5. Update the environment counters and compute the rewards and terminations.
         6. Reset the environments that terminated.
         7. Compute the observations after reset.
         8. Return the observations (after reset), observations (before reset), rewards, resets and extras.
@@ -43,6 +44,7 @@ class HimlocoManagerBasedRLEnv(ManagerBasedRLEnv):
                 - extras: Additional information dictionary (Dict[str, Any])
         """
         # process actions
+        self._pre_pre_action = self.action_manager.prev_action.clone()
         self.action_manager.process_action(action.to(self.device))
 
         self.recorder_manager.record_pre_step()
@@ -68,6 +70,8 @@ class HimlocoManagerBasedRLEnv(ManagerBasedRLEnv):
             # update buffers at sim dt
             self.scene.update(dt=self.physics_dt)
 
+        # -- get observations before reset
+        self.obs_buf_before_reset = self.observation_manager.compute()
         # post-step:
         # -- update env counters (used for curriculum generation)
         self.episode_length_buf += 1  # step in current episode (per env)
@@ -84,8 +88,6 @@ class HimlocoManagerBasedRLEnv(ManagerBasedRLEnv):
             self.obs_buf = self.observation_manager.compute()
             self.recorder_manager.record_post_step()
             
-        # -- get observations before reset
-        self.obs_buf_before_reset = self.observation_manager.compute()
 
         # -- reset envs that terminated/timed-out and log the episode information
         reset_env_ids = self.reset_buf.nonzero(as_tuple=False).squeeze(-1)
@@ -117,3 +119,7 @@ class HimlocoManagerBasedRLEnv(ManagerBasedRLEnv):
         # return observations, rewards, resets and extras
         return self.obs_buf, self.obs_buf_before_reset, self.reward_buf, self.reset_terminated, self.reset_time_outs, self.extras
 
+    @property
+    def pre_pre_action(self) -> torch.Tensor:
+        """The previous  previous actions sent to the environment. Shape is (num_envs, total_action_dim)."""
+        return self._pre_pre_action
