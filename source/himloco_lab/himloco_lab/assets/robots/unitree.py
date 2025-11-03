@@ -42,6 +42,11 @@ UNITREE_GO2_CFG = UnitreeArticulationCfg(
             max_angular_velocity=100.0,
             max_depenetration_velocity=1.0,
         ),
+        collision_props=sim_utils.CollisionPropertiesCfg(
+            collision_enabled=False,
+            contact_offset=0.01,    
+            rest_offset=0,     
+        ),
         articulation_props=sim_utils.ArticulationRootPropertiesCfg(
             enabled_self_collisions=True, solver_position_iteration_count=4, solver_velocity_iteration_count=0
         ),
