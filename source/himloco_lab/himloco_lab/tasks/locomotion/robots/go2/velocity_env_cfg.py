@@ -20,6 +20,7 @@ from isaaclab.utils.noise import AdditiveUniformNoiseCfg as Unoise
 
 from himloco_lab.assets.robots.unitree import UNITREE_GO2_CFG as ROBOT_CFG
 from himloco_lab.tasks.locomotion import mdp
+import himloco_lab.terrains as him_terrains
 
 COBBLESTONE_ROAD_CFG = terrain_gen.TerrainGeneratorCfg(
     size=(8.0, 8.0),
@@ -31,18 +32,13 @@ COBBLESTONE_ROAD_CFG = terrain_gen.TerrainGeneratorCfg(
     slope_threshold=0.75,
     difficulty_range=(0.0, 1.0),
     use_cache=False,
-    sub_terrains={     
-        "hf_pyramid_slope": terrain_gen.HfPyramidSlopedTerrainCfg(
-            proportion=0.1, 
-            slope_range=(0.0, 0.4),  
-            platform_width=3.0,  
-            border_width=0.0,
-        ),
-        "random_rough": terrain_gen.HfRandomUniformTerrainCfg(
-            proportion=0.2, 
-            noise_range=(0.01, 0.08),  
-            noise_step=0.005,  
-            border_width=0.2, 
+    sub_terrains={
+        "discrete_obstacles": him_terrains.HfDiscreteObstaclesTerrainCfg(
+            proportion=0.1,
+            max_height_range=(0.05, 0.15),  # 0.05 + 0.1 * difficulty
+            obstacle_size_range=(1.0, 2.0),  # min=1m, max=2m
+            num_obstacles=20,
+            platform_width=3.0,
         ),
         "pyramid_stairs": terrain_gen.MeshPyramidStairsTerrainCfg(
             proportion=0.3,
@@ -58,8 +54,23 @@ COBBLESTONE_ROAD_CFG = terrain_gen.TerrainGeneratorCfg(
             platform_width=3.0,
             border_width=0.0,  
         ),
+        "hf_slope_with_noise": him_terrains.HfPyramidSlopeWithNoiseCfg(
+            proportion=0.2,
+            slope_range=(0.0, 0.4),
+            platform_width=3.0,
+            border_width=0.0,
+            noise_amplitude_range=(0.01, 0.08),
+            noise_step=0.005,
+            downsampled_scale=0.2,
+        ),     
+        "hf_pyramid_slope": terrain_gen.HfPyramidSlopedTerrainCfg(
+            proportion=0.05, 
+            slope_range=(0.0, 0.4),  
+            platform_width=3.0,  
+            border_width=0.0,
+        ),
         "hf_pyramid_slope_inv": terrain_gen.HfInvertedPyramidSlopedTerrainCfg(
-            proportion=0.1, 
+            proportion=0.05, 
             slope_range=(0.0, 0.4),  
             platform_width=3.0,
             border_width=0.0,  
@@ -164,7 +175,7 @@ class EventCfg:
         func=mdp.reset_joints_by_scale,
         mode="reset",
         params={
-            "position_range": (1.0, 1.0),
+            "position_range": (0.5, 1.5),
             "velocity_range": (0, 0),
         },
     )
@@ -442,8 +453,9 @@ class RobotEnvCfg(ManagerBasedRLEnvCfg):
         self.sim.physx.max_velocity_iteration_count = 0
         self.sim.physx.bounce_threshold_velocity = 0.5
         
-        self.sim.physx.gpu_max_rigid_patch_count = 2**23  
-        self.sim.physx.gpu_found_lost_pairs_capacity = 2**23
+        self.sim.physx.gpu_max_rigid_patch_count = 2**23 
+        self.sim.physx.gpu_max_rigid_contact_count = 2**23 
+        # self.sim.physx.gpu_found_lost_pairs_capacity = 2**23
 
         # update sensor update periods
         # we tick all the sensors based on the smallest update period (physics update period)
@@ -471,5 +483,5 @@ class RobotPlayEnvCfg(RobotEnvCfg):
         self.commands.base_velocity.heading_command = False
         self.commands.base_velocity.rel_standing_envs = 0.0
         self.commands.base_velocity.ranges = mdp.UniformLevelVelocityCommandCfg.Ranges(
-            lin_vel_x=(2, 2), lin_vel_y=(0, 0), ang_vel_z=(-0, 0), heading=(-0, 0)
+            lin_vel_x=(1, 1), lin_vel_y=(0, 0), ang_vel_z=(-0, 0), heading=(-0, 0)
         )
