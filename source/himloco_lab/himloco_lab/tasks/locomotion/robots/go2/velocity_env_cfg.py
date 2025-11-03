@@ -136,9 +136,9 @@ class EventCfg:
         mode="startup",
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names=".*"),
-            "static_friction_range": (0.3, 1.6),
-            "dynamic_friction_range": (0.3, 1.6),
-            "restitution_range": (0.0, 0.15),
+            "static_friction_range": (0.2, 1.25),
+            "dynamic_friction_range": (0.2, 1.25),
+            "restitution_range": (0.0, 0.0),
             "num_buckets": 64,
         },
     )
@@ -148,8 +148,17 @@ class EventCfg:
         mode="startup",
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names="base"),
-            "mass_distribution_params": (-1.0, 3.0),
+            "mass_distribution_params": (-1.0, 2.0),
             "operation": "add",
+        },
+    )
+    
+    randomize_rigid_body_com = EventTerm(
+        func=mdp.randomize_rigid_body_com,
+        mode="startup",
+        params={
+            "asset_cfg": SceneEntityCfg("robot", body_names="base"),
+            "com_range": {"x": (-0.05, 0.05), "y": (-0.05, 0.05), "z": (-0.05, 0.05)},
         },
     )
 
@@ -186,7 +195,7 @@ class EventCfg:
         mode="interval",
         interval_range_s=(8.0, 8.0),
         params={
-            "force_range": (-20.0, 20.0),
+            "force_range": (-30.0, 30.0),
             "torque_range": (-0.0, 0.0),
             "asset_cfg": SceneEntityCfg("robot", body_names="base"),
         },
