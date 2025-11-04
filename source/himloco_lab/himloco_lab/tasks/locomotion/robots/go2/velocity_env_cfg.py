@@ -190,16 +190,16 @@ class EventCfg:
     )
 
     # interval
-    external_force = EventTerm(
-        func=mdp.apply_external_force_torque,
-        mode="interval",
-        interval_range_s=(8.0, 8.0),
-        params={
-            "force_range": (-30.0, 30.0),
-            "torque_range": (-0.0, 0.0),
-            "asset_cfg": SceneEntityCfg("robot", body_names="base"),
-        },
-    )
+    # external_force = EventTerm(
+    #     func=mdp.apply_external_force_torque,
+    #     mode="interval",
+    #     interval_range_s=(8.0*0.02, 8.0*0.02),
+    #     params={
+    #         "force_range": (-30.0, 30.0),
+    #         "torque_range": (-0.0, 0.0),
+    #         "asset_cfg": SceneEntityCfg("robot", body_names="base"),
+    #     },
+    # )
     push_robot = EventTerm(
         func=mdp.push_by_setting_velocity,
         mode="interval",
@@ -235,7 +235,8 @@ class ActionsCfg:
         asset_name="robot", joint_names=[".*"], scale=0.25, use_default_offset=True, clip={".*": (-100.0, 100.0)}
     )
 
-
+# observation compute step in lab: noise clip scale
+# observation compute step in gym: clip scale noise
 @configclass
 class ObservationsCfg:
     """Observation specifications for the MDP."""
@@ -256,32 +257,31 @@ class ObservationsCfg:
         )
         last_action = ObsTerm(func=mdp.last_action, clip=(-100, 100))
 
-        # def __post_init__(self):
-        #     self.enable_corruption = True
-        #     self.concatenate_terms = True
+        def __post_init__(self):
+            self.enable_corruption = True
 
     # observation groups
     policy: PolicyCfg = PolicyCfg()
 
     @configclass
-    class CriticCfg(PolicyCfg):
+    class CriticCfg(ObsGroup):
         """Observations for critic group."""
 
-        base_lin_vel = ObsTerm(func=mdp.base_lin_vel, scale=2.0, clip=(-100, 100))
+        base_lin_vel = ObsTerm(func=mdp.base_lin_vel, scale=2.0, clip=(-100, 100), noise=Unoise(n_min=-0.1, n_max=0.1))
         base_external_force = ObsTerm(
             func=mdp.base_external_force,
             params={"asset_cfg": SceneEntityCfg("robot", body_names="base")},
             clip=(-100, 100),
         )
-        height_scanner = ObsTerm(func=mdp.height_scan,
+        height_scanner = ObsTerm(func=mdp.height_scan_clip,
             scale=5.0,
             params={"sensor_cfg": SceneEntityCfg("height_scanner")},
-            clip=(-5.0, 5.0),
+            clip=(-100, 100),
+            noise=Unoise(n_min=-0.1, n_max=0.1)
         )
 
-        # def __post_init__(self):
-        #     self.enable_corruption = True
-        #     self.concatenate_terms = True
+        def __post_init__(self):
+            self.enable_corruption = True
 
     # privileged observations
     critic: CriticCfg = CriticCfg()
@@ -492,5 +492,5 @@ class RobotPlayEnvCfg(RobotEnvCfg):
         self.commands.base_velocity.heading_command = False
         self.commands.base_velocity.rel_standing_envs = 0.0
         self.commands.base_velocity.ranges = mdp.UniformLevelVelocityCommandCfg.Ranges(
-            lin_vel_x=(1, 1), lin_vel_y=(0, 0), ang_vel_z=(-0, 0), heading=(-0, 0)
+            lin_vel_x=(0, 0), lin_vel_y=(0, 0), ang_vel_z=(-0, 0), heading=(-0, 0)
         )

@@ -7,8 +7,8 @@ from typing import Literal
 class HIMBaseRunnerCfg:
     """Base configuration of the runner."""
 
-    seed: int = 42
-    """The seed for the experiment. Default is 42."""
+    seed: int = 1
+    """The seed for the experiment. Default is 1."""
 
     device: str = "cuda:0"
     """The device for the rl-agent. Default is cuda:0."""
