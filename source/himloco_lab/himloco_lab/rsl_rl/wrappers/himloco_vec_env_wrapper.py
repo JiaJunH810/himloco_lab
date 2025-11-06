@@ -312,6 +312,12 @@ class HimlocoVecEnvWrapper(VecEnv):
             else:
                 self.privileged_obs_history_buf = current_privileged_obs
         
+        # Check for NaN/Inf in observations before returning
+        if self.privileged_obs_history_buf is not None:
+                raise ValueError("NaN/Inf detected in privileged_obs_history_buf!")
+        if torch.isnan(rewards).any() or torch.isinf(rewards).any():
+            raise ValueError("NaN/Inf detected in rewards!")
+            
         return (
             self.obs_history_buf,
             self.privileged_obs_history_buf,

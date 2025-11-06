@@ -33,12 +33,26 @@ COBBLESTONE_ROAD_CFG = terrain_gen.TerrainGeneratorCfg(
     difficulty_range=(0.0, 1.0),
     use_cache=False,
     sub_terrains={
-        "discrete_obstacles": him_terrains.HfDiscreteObstaclesTerrainCfg(
-            proportion=0.1,
-            max_height_range=(0.05, 0.15),  # 0.05 + 0.1 * difficulty
-            obstacle_size_range=(1.0, 2.0),  # min=1m, max=2m
-            num_obstacles=20,
+        "hf_pyramid_slope": terrain_gen.HfPyramidSlopedTerrainCfg(
+            proportion=0.05, 
+            slope_range=(0.0, 0.4),  
+            platform_width=3.0,  
+            border_width=0.0,
+        ),
+        "hf_pyramid_slope_inv": terrain_gen.HfInvertedPyramidSlopedTerrainCfg(
+            proportion=0.05, 
+            slope_range=(0.0, 0.4),  
             platform_width=3.0,
+            border_width=0.0,  
+        ),
+        "hf_slope_with_noise": him_terrains.HfPyramidSlopeWithNoiseCfg(
+            proportion=0.2,
+            slope_range=(0.0, 0.4),
+            platform_width=3.0,
+            border_width=0.0,
+            noise_amplitude_range=(0.01, 0.08),
+            noise_step=0.005,
+            downsampled_scale=0.2,
         ),
         "pyramid_stairs": terrain_gen.MeshPyramidStairsTerrainCfg(
             proportion=0.3,
@@ -54,26 +68,12 @@ COBBLESTONE_ROAD_CFG = terrain_gen.TerrainGeneratorCfg(
             platform_width=3.0,
             border_width=0.0,  
         ),
-        "hf_slope_with_noise": him_terrains.HfPyramidSlopeWithNoiseCfg(
-            proportion=0.2,
-            slope_range=(0.0, 0.4),
+        "discrete_obstacles": him_terrains.HfDiscreteObstaclesTerrainCfg(
+            proportion=0.1,
+            max_height_range=(0.05, 0.15),  # 0.05 + 0.1 * difficulty
+            obstacle_size_range=(1.0, 2.0),  # min=1m, max=2m
+            num_obstacles=20,
             platform_width=3.0,
-            border_width=0.0,
-            noise_amplitude_range=(0.01, 0.08),
-            noise_step=0.005,
-            downsampled_scale=0.2,
-        ),     
-        "hf_pyramid_slope": terrain_gen.HfPyramidSlopedTerrainCfg(
-            proportion=0.05, 
-            slope_range=(0.0, 0.4),  
-            platform_width=3.0,  
-            border_width=0.0,
-        ),
-        "hf_pyramid_slope_inv": terrain_gen.HfInvertedPyramidSlopedTerrainCfg(
-            proportion=0.05, 
-            slope_range=(0.0, 0.4),  
-            platform_width=3.0,
-            border_width=0.0,  
         ),
     },
 )
@@ -266,7 +266,18 @@ class ObservationsCfg:
     @configclass
     class CriticCfg(ObsGroup):
         """Observations for critic group."""
-
+        # observation terms (order preserved)
+        # base_ang_vel = ObsTerm(func=mdp.base_ang_vel, scale=0.25, clip=(-100, 100), noise=Unoise(n_min=-0.2, n_max=0.2))
+        # projected_gravity = ObsTerm(func=mdp.projected_gravity, clip=(-100, 100), noise=Unoise(n_min=-0.05, n_max=0.05))
+        # velocity_commands = ObsTerm(
+        #     func=mdp.generated_commands, clip=(-100, 100), params={"command_name": "base_velocity"}
+        # )
+        # joint_pos_rel = ObsTerm(func=mdp.joint_pos_rel, clip=(-100, 100), noise=Unoise(n_min=-0.01, n_max=0.01))
+        # joint_vel_rel = ObsTerm(
+        #     func=mdp.joint_vel_rel, scale=0.05, clip=(-100, 100), noise=Unoise(n_min=-1.5, n_max=1.5)
+        # )
+        # last_action = ObsTerm(func=mdp.last_action, clip=(-100, 100))
+        
         base_lin_vel = ObsTerm(func=mdp.base_lin_vel, scale=2.0, clip=(-100, 100), noise=Unoise(n_min=-0.1, n_max=0.1))
         base_external_force = ObsTerm(
             func=mdp.base_external_force,
@@ -317,7 +328,7 @@ class RewardsCfg:
     energy = RewTerm(func=mdp.energy, weight=-2e-5)
     
     base_height_l2 = RewTerm(
-        func=mdp.base_height_l2, 
+        func=mdp.base_height, 
         weight=-1.0, 
         params={
             "target_height": 0.3,
@@ -468,8 +479,8 @@ class RobotEnvCfg(ManagerBasedRLEnvCfg):
 
         # update sensor update periods
         # we tick all the sensors based on the smallest update period (physics update period)
-        self.scene.contact_forces.update_period = self.sim.dt
-        self.scene.height_scanner.update_period = self.sim.dt
+        self.scene.contact_forces.update_period = self.sim.dt * self.decimation
+        self.scene.height_scanner.update_period = self.sim.dt * self.decimation
 
         # check if terrain levels curriculum is enabled - if so, enable curriculum for terrain generator
         # this generates terrains with increasing difficulty and is useful for training
@@ -492,5 +503,5 @@ class RobotPlayEnvCfg(RobotEnvCfg):
         self.commands.base_velocity.heading_command = False
         self.commands.base_velocity.rel_standing_envs = 0.0
         self.commands.base_velocity.ranges = mdp.UniformLevelVelocityCommandCfg.Ranges(
-            lin_vel_x=(0, 0), lin_vel_y=(0, 0), ang_vel_z=(-0, 0), heading=(-0, 0)
+            lin_vel_x=(1, 1), lin_vel_y=(0, 0), ang_vel_z=(-0, 0), heading=(-0, 0)
         )
