@@ -190,10 +190,25 @@ def base_height(
         sensor: RayCaster = env.scene[sensor_cfg.name]
         # Adjust the target height using the sensor data
         ray_hits = sensor.data.ray_hits_w[..., 2]
-        if torch.isnan(ray_hits).any() or torch.isinf(ray_hits).any() or torch.max(torch.abs(ray_hits)) > 1e6:
-            adjusted_target_height = asset.data.root_link_pos_w[:, 2]
-        else:
-            adjusted_target_height = target_height + torch.mean(ray_hits, dim=1)
+        
+        # Replace invalid values (NaN, Inf, too large) with NaN for masked mean
+        valid_mask = ~torch.isnan(ray_hits) & ~torch.isinf(ray_hits) & (torch.abs(ray_hits) < 1e6)
+        ray_hits_masked = torch.where(valid_mask, ray_hits, torch.tensor(float('nan'), device=ray_hits.device))
+        
+        # Compute mean ignoring NaN (i.e., ignoring invalid points)
+        # nanmean computes mean per environment, automatically ignoring NaN values
+        adjusted_heights = torch.nanmean(ray_hits_masked, dim=1)
+        
+        # For environments where ALL points are invalid, nanmean returns NaN
+        # Replace these with current robot height
+        all_invalid_mask = torch.isnan(adjusted_heights)
+        if all_invalid_mask.any():
+            invalid_env_count = all_invalid_mask.sum().item()
+            total_invalid_points = (~valid_mask).sum().item()
+            print(f"[WARNING] base_height - {invalid_env_count} envs with all invalid points, total invalid: {total_invalid_points}/{ray_hits.numel()} ({total_invalid_points/ray_hits.numel():.2%})")
+            adjusted_heights[all_invalid_mask] = asset.data.root_link_pos_w[all_invalid_mask, 2] - target_height
+        
+        adjusted_target_height = target_height + adjusted_heights
     else:
         # Use the provided target height directly for flat terrain
         adjusted_target_height = target_height
