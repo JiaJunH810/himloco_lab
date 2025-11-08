@@ -64,6 +64,7 @@ from isaaclab.utils.dict import print_dict
 import himloco_lab.tasks  # noqa: F401
 from himloco_lab.rsl_rl import HIMOnPolicyRunner, HimlocoVecEnvWrapper
 from himloco_lab.rsl_rl.config import HIMOnPolicyRunnerCfg
+from himloco_lab.utils import export_deploy_cfg, export_himloco_policy_as_onnx
 from isaaclab_tasks.utils import get_checkpoint_path
 from isaaclab_tasks.utils.hydra import hydra_task_config
 
@@ -140,6 +141,14 @@ def main(env_cfg: ManagerBasedRLEnvCfg, agent_cfg: HIMOnPolicyRunnerCfg):
 
     print(f"[INFO]: Loading model checkpoint from: {resume_path}")
     
+    # Export deployment configuration with history_length and use_encoder flag
+    # export_deploy_cfg(
+    #     env.unwrapped, 
+    #     log_dir,
+    #     history_length=agent_cfg.history_length,
+    #     use_encoder=True  # HimLoco uses dual network architecture
+    # )
+    
     # create runner from HimLoco RSL-RL
     runner = HIMOnPolicyRunner(env, agent_cfg.to_dict(), log_dir=None, device=agent_cfg.device)
     
@@ -149,9 +158,16 @@ def main(env_cfg: ManagerBasedRLEnvCfg, agent_cfg: HIMOnPolicyRunnerCfg):
     # obtain the trained policy for inference
     policy = runner.get_inference_policy(device=env.device)
 
-    # export policy (optional - can be commented out if not needed)
-    # export_model_dir = os.path.join(os.path.dirname(resume_path), "exported")
-    # TODO: Add export functionality for HimLoco policy if needed
+    # export HimLoco dual network (encoder + policy) to ONNX
+    export_model_dir = os.path.join(os.path.dirname(resume_path), "exported")
+    print(f"[INFO] Exporting HimLoco dual network to: {export_model_dir}")
+    export_himloco_policy_as_onnx(
+        runner.alg.actor_critic,
+        path=export_model_dir,
+        encoder_filename="encoder.onnx",
+        policy_filename="policy.onnx",
+        verbose=False
+    )
 
     dt = env.unwrapped.step_dt
 
