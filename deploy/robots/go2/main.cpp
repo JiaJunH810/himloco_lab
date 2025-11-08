@@ -2,6 +2,7 @@
 #include "FSM/State_Passive.h"
 #include "FSM/State_FixStand.h"
 #include "FSM/State_RLBase.h"
+#include "isaaclab/devices/keyboard/keyboard.h"
 
 std::unique_ptr<LowCmd_t> FSMState::lowcmd = nullptr;
 std::shared_ptr<LowState_t> FSMState::lowstate = nullptr;
@@ -37,29 +38,54 @@ int main(int argc, char** argv)
 
     init_fsm_state();
 
+    // Initialize keyboard input
+    FSMState::keyboard = std::make_shared<Keyboard>();
+
     // Initialize FSM
-    auto & joy = FSMState::lowstate->joystick;
     auto fsm = std::make_unique<CtrlFSM>(new State_Passive(FSMMode::Passive));
+    
+    // Transition from Passive to FixStand on 'F' key
     fsm->states.back()->registered_checks.emplace_back(
         std::make_pair(
-            [&]()->bool{ return joy.LT.pressed && joy.A.on_pressed; }, // L2 + A
+            [&]()->bool{ 
+                return FSMState::keyboard->key() == "f" && FSMState::keyboard->on_pressed;
+            }, 
             (int)FSMMode::FixStand
         )
     );
+    
     fsm->add(new State_FixStand(FSMMode::FixStand));
+    
+    // Transition from FixStand to RLBase on 'S' key
     fsm->states.back()->registered_checks.emplace_back(
         std::make_pair(
-            [&]()->bool{ return joy.start.on_pressed; }, // Start
+            [&]()->bool{ 
+                return FSMState::keyboard->key() == "s" && FSMState::keyboard->on_pressed;
+            }, 
             FSMMode::Velocity
         )
     );
+    
+    // Transition from RLBase back to FixStand on 'Q' key
     fsm->add(new State_RLBase(FSMMode::Velocity, "Velocity"));
+    fsm->states.back()->registered_checks.emplace_back(
+        std::make_pair(
+            [&]()->bool{ 
+                return FSMState::keyboard->key() == "q" && FSMState::keyboard->on_pressed;
+            }, 
+            (int)FSMMode::FixStand
+        )
+    );
 
-    std::cout << "Press [L2 + A] to enter FixStand mode.\n";
-    std::cout << "And then press [Start] to start controlling the robot.\n";
+    std::cout << "\n=== Keyboard Control ===" << std::endl;
+    std::cout << "  [F] - Enter FixStand mode" << std::endl;
+    std::cout << "  [S] - Start RL control" << std::endl;
+    std::cout << "  [Q] - Stop RL control (return to FixStand)" << std::endl;
+    std::cout << "========================\n" << std::endl;
 
     while (true)
     {
+        FSMState::keyboard->update();
         sleep(1);
     }
     

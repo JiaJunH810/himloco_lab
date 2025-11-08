@@ -14,7 +14,20 @@ State_RLBase::State_RLBase(int state_mode, std::string state_string)
         YAML::LoadFile(policy_dir / "params" / "deploy.yaml"),
         std::make_shared<unitree::BaseArticulation<LowState_t::SharedPtr>>(FSMState::lowstate)
     );
-    env->alg = std::make_unique<isaaclab::OrtRunner>(policy_dir / "exported" / "policy.onnx");
+    
+    // Check if dual network mode is enabled
+    if (cfg["use_encoder"] && cfg["use_encoder"].as<bool>()) {
+        spdlog::info("Loading dual network (encoder + policy)...");
+        env->alg = std::make_unique<isaaclab::DualOrtRunner>(
+            (policy_dir / "exported" / "encoder.onnx").string(),
+            (policy_dir / "exported" / "policy.onnx").string()
+        );
+    } else {
+        spdlog::info("Loading single network (policy only)...");
+        env->alg = std::make_unique<isaaclab::OrtRunner>(
+            (policy_dir / "exported" / "policy.onnx").string()
+        );
+    }
 
     this->registered_checks.emplace_back(
         std::make_pair(

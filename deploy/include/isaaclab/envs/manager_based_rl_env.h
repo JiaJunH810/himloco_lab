@@ -58,6 +58,8 @@ public:
     {
         episode_length += 1;
         robot->update();
+        
+        // All observations use the same global history_length
         auto obs = observation_manager->compute();
         auto action = alg->act(obs);
         action_manager->process_action(action);
