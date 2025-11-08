@@ -18,7 +18,7 @@ from isaaclab.utils import configclass
 from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR, ISAACLAB_NUCLEUS_DIR
 from isaaclab.utils.noise import AdditiveUniformNoiseCfg as Unoise
 
-from himloco_lab.assets.robots.unitree import UNITREE_GO2_CFG as ROBOT_CFG
+from himloco_lab.assets.unitree import UNITREE_GO2_CFG as ROBOT_CFG
 from himloco_lab.tasks.locomotion import mdp
 import himloco_lab.terrains as him_terrains
 
@@ -34,26 +34,26 @@ COBBLESTONE_ROAD_CFG = terrain_gen.TerrainGeneratorCfg(
     use_cache=False,
     sub_terrains={
         "hf_pyramid_slope": terrain_gen.HfPyramidSlopedTerrainCfg(
-            proportion=0.05, 
+            proportion=0.15, 
             slope_range=(0.0, 0.4),  
             platform_width=3.0,  
             border_width=0.0,
         ),
         "hf_pyramid_slope_inv": terrain_gen.HfInvertedPyramidSlopedTerrainCfg(
-            proportion=0.05, 
+            proportion=0.15, 
             slope_range=(0.0, 0.4),  
             platform_width=3.0,
             border_width=0.0,  
         ),
-        "hf_slope_with_noise": him_terrains.HfPyramidSlopeWithNoiseCfg(
-            proportion=0.2,
-            slope_range=(0.0, 0.4),
-            platform_width=3.0,
-            border_width=0.0,
-            noise_amplitude_range=(0.01, 0.08),
-            noise_step=0.005,
-            downsampled_scale=0.2,
-        ),
+        # "hf_slope_with_noise": him_terrains.HfPyramidSlopeWithNoiseCfg(
+        #     proportion=0.2,
+        #     slope_range=(0.0, 0.4),
+        #     platform_width=3.0,
+        #     border_width=0.0,
+        #     noise_amplitude_range=(0.01, 0.08),
+        #     noise_step=0.005,
+        #     downsampled_scale=0.2,
+        # ),
         "pyramid_stairs": terrain_gen.MeshPyramidStairsTerrainCfg(
             proportion=0.3,
             step_height_range=(0.05, 0.23),  # 0.05 + 0.18 * difficulty
@@ -280,11 +280,11 @@ class ObservationsCfg:
         # last_action = ObsTerm(func=mdp.last_action, clip=(-100, 100))
         
         base_lin_vel = ObsTerm(func=mdp.base_lin_vel, scale=2.0, clip=(-100, 100), noise=Unoise(n_min=-0.1, n_max=0.1))
-        base_external_force = ObsTerm(
-            func=mdp.base_external_force,
-            params={"asset_cfg": SceneEntityCfg("robot", body_names="base")},
-            clip=(-100, 100),
-        )
+        # base_external_force = ObsTerm(
+        #     func=mdp.base_external_force,
+        #     params={"asset_cfg": SceneEntityCfg("robot", body_names="base")},
+        #     clip=(-100, 100),
+        # )
         height_scanner = ObsTerm(func=mdp.height_scan_clip,
             scale=5.0,
             params={"sensor_cfg": SceneEntityCfg("height_scanner")},
@@ -352,14 +352,15 @@ class RewardsCfg:
     # joint_torques = RewTerm(func=mdp.joint_torques_l2, weight=-2e-4)
     # joint_vel = RewTerm(func=mdp.joint_vel_l2, weight=-0.001)
     
-    # undesired_contacts = RewTerm(
-    #     func=mdp.undesired_contacts,
-    #     weight=-1,
-    #     params={
-    #         "threshold": 0.1,
-    #         "sensor_cfg": SceneEntityCfg("contact_forces", body_names=[".*_thigh", ".*_calf"]),
-    #     },
-    # )
+    undesired_contacts = RewTerm(
+        func=mdp.undesired_contacts,
+        weight=-1,
+        params={
+            "threshold": 0.3,
+            # "sensor_cfg": SceneEntityCfg("contact_forces", body_names=["Head_.*", ".*_hip", ".*_thigh", ".*_calf"]),
+            "sensor_cfg": SceneEntityCfg("contact_forces", body_names=["Head_.*"]),
+        },
+    )
 
     # is_terminated = RewTerm(func=mdp.is_terminated, weight=-5.0)
     # joint_pos_limits = RewTerm(func=mdp.joint_pos_limits, weight=-10.0)
@@ -378,7 +379,7 @@ class RewardsCfg:
     
     # feet_stumble = RewTerm(
     #     func=mdp.feet_stumble,
-    #     weight=-0.5,
+    #     weight=-0.1,
     #     params={
     #         "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_foot"),
     #     },
@@ -418,6 +419,17 @@ class RewardsCfg:
     #     params={
     #         "asset_cfg": SceneEntityCfg("robot", body_names=".*_foot"),
     #         "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_foot"),
+    #     },
+    # )
+    # feet_gait = RewTerm(
+    #     func=mdp.feet_gait,
+    #     weight=1.0,
+    #     params={
+    #         "period": 0.5,  
+    #         "offset": [0.0, 0.5, 0.5, 0.0],  # （LF, RF, LH, RH）
+    #         "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_foot"),
+    #         "threshold": 0.5,
+    #         "command_name": "base_velocity",
     #     },
     # )
 
@@ -506,7 +518,13 @@ class RobotPlayEnvCfg(RobotEnvCfg):
         self.scene.terrain.terrain_generator.num_cols = 10
         self.scene.terrain.max_init_terrain_level = 10
         self.scene.terrain.terrain_generator.curriculum = True
-        # self.commands.base_velocity.heading_command = False
+        self.commands.base_velocity.heading_command = False
         self.commands.base_velocity.ranges = mdp.UniformLevelVelocityCommandCfg.Ranges(
-            lin_vel_x=(-2, 2), lin_vel_y=(-1.0, 1.0), ang_vel_z=(-2, 2), heading=(-math.pi, math.pi)
+            lin_vel_x=(1, 1), lin_vel_y=(-0.0, 0.0), ang_vel_z=(-0, 0), 
         )
+        self.commands.base_velocity.low_vel_env_lin_x_ranges=(1,1)
+        
+        # Disable randomization events for play mode
+        self.events.add_base_mass = None
+        self.events.randomize_rigid_body_com = None
+        self.events.push_robot = None
