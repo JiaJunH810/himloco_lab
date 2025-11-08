@@ -3,7 +3,7 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""Script to play a checkpoint of an RL agent trained with HimLoco RSL-RL."""
+"""Script to verify exported ONNX models using HimLoco RSL-RL environment."""
 
 """Launch Isaac Sim Simulator first."""
 
@@ -16,7 +16,7 @@ from isaaclab.app import AppLauncher
 import cli_args  # isort: skip
 
 # add argparse arguments
-parser = argparse.ArgumentParser(description="Play a checkpoint with HimLoco RSL-RL agent.")
+parser = argparse.ArgumentParser(description="Verify ONNX models with HimLoco RSL-RL agent.")
 parser.add_argument("--video", action="store_true", default=False, help="Record videos during playback.")
 parser.add_argument("--video_length", type=int, default=200, help="Length of the recorded video (in steps).")
 parser.add_argument(
@@ -32,6 +32,7 @@ parser.add_argument(
 )
 parser.add_argument("--seed", type=int, default=None, help="Seed used for the environment")
 parser.add_argument("--real-time", action="store_true", default=False, help="Run in real-time, if possible.")
+parser.add_argument("--onnx_dir", type=str, default=None, help="Directory containing exported ONNX models.")
 # append HimLoco RSL-RL cli arguments
 cli_args.add_himloco_rsl_rl_args(parser)
 # append AppLauncher cli args
@@ -56,15 +57,15 @@ import gymnasium as gym
 import os
 import time
 import torch
+import numpy as np
 
 from isaaclab.envs import ManagerBasedRLEnvCfg
 from isaaclab.utils.assets import retrieve_file_path
 from isaaclab.utils.dict import print_dict
 
 import himloco_lab.tasks  # noqa: F401
-from himloco_lab.rsl_rl import HIMOnPolicyRunner, HimlocoVecEnvWrapper
+from himloco_lab.rsl_rl import HimlocoVecEnvWrapper, HIMOnPolicyRunner
 from himloco_lab.rsl_rl.config import HIMOnPolicyRunnerCfg
-from himloco_lab.utils import export_deploy_cfg, export_himloco_policy_as_onnx
 from isaaclab_tasks.utils import get_checkpoint_path
 from isaaclab_tasks.utils.hydra import hydra_task_config
 
@@ -74,9 +75,101 @@ torch.backends.cudnn.deterministic = False
 torch.backends.cudnn.benchmark = False
 
 
+class ONNXPolicy:
+    """ONNX policy wrapper for dual network inference."""
+    
+    def __init__(self, encoder_path: str, policy_path: str, device: str = "cpu"):
+        """Initialize ONNX runtime sessions.
+        
+        Args:
+            encoder_path: Path to encoder ONNX model
+            policy_path: Path to policy ONNX model
+            device: Device to run inference on
+        """
+        import onnxruntime as ort
+        
+        self.device = device
+        
+        # Set ONNX Runtime session options
+        sess_options = ort.SessionOptions()
+        sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_EXTENDED
+        
+        # Load encoder
+        print(f"[INFO] Loading encoder from: {encoder_path}")
+        self.encoder_session = ort.InferenceSession(encoder_path, sess_options)
+        self.encoder_input_name = self.encoder_session.get_inputs()[0].name
+        self.encoder_output_name = self.encoder_session.get_outputs()[0].name
+        encoder_input_shape = self.encoder_session.get_inputs()[0].shape
+        encoder_output_shape = self.encoder_session.get_outputs()[0].shape
+        print(f"[INFO] Encoder - Input: {encoder_input_shape}, Output: {encoder_output_shape}")
+        
+        # Load policy
+        print(f"[INFO] Loading policy from: {policy_path}")
+        self.policy_session = ort.InferenceSession(policy_path, sess_options)
+        self.policy_input_name = self.policy_session.get_inputs()[0].name
+        self.policy_output_name = self.policy_session.get_outputs()[0].name
+        policy_input_shape = self.policy_session.get_inputs()[0].shape
+        policy_output_shape = self.policy_session.get_outputs()[0].shape
+        print(f"[INFO] Policy - Input: {policy_input_shape}, Output: {policy_output_shape}")
+        
+        # Store dimensions
+        self.encoder_input_dim = encoder_input_shape[1]
+        self.encoder_output_dim = encoder_output_shape[1]
+        self.policy_output_dim = policy_output_shape[1]
+        
+    def __call__(self, obs: torch.Tensor) -> torch.Tensor:
+        """Run inference on observations using ONNX models.
+        
+        Args:
+            obs: Observation tensor of shape (num_envs, obs_dim)
+                 Format: [history_obs (encoder_input_dim) | current_obs (remaining)]
+        
+        Returns:
+            Action tensor of shape (num_envs, action_dim)
+        """
+        # Convert to numpy
+        obs_np = obs.cpu().numpy().astype(np.float32)
+        num_envs = obs_np.shape[0]
+        
+        # Split observation into history and current
+        history_obs = obs_np
+        current_obs = obs_np[:, :45]   # (num_envs, current_obs_dim)
+        
+        # Process each environment separately (ONNX models expect batch size 1)
+        actions_list = []
+        
+        for i in range(num_envs):
+            # Get single env observation
+            single_history = obs_np[i:i+1]  # (1, encoder_input_dim)
+            single_current = current_obs[i:i+1]  # (1, 45)
+            
+            # Run ONNX encoder
+            encoder_output = self.encoder_session.run(
+                [self.encoder_output_name],
+                {self.encoder_input_name: single_history}
+            )[0]  # (1, encoder_output_dim)
+            
+            # Concatenate current_obs with encoder output
+            policy_input = np.concatenate([single_current, encoder_output], axis=1)  # (1, 64)
+            
+            # Run ONNX policy
+            action = self.policy_session.run(
+                [self.policy_output_name],
+                {self.policy_input_name: policy_input}
+            )[0]  # (1, action_dim)
+            
+            actions_list.append(action)
+        
+        # Stack all actions
+        actions = np.concatenate(actions_list, axis=0)  # (num_envs, action_dim)
+        
+        # Convert back to torch tensor
+        return torch.from_numpy(actions).to(self.device)
+
+
 @hydra_task_config(args_cli.task, args_cli.agent)
 def main(env_cfg: ManagerBasedRLEnvCfg, agent_cfg: HIMOnPolicyRunnerCfg):
-    """Play with HimLoco RSL-RL agent."""
+    """Verify ONNX models with HimLoco RSL-RL environment."""
     # grab task name for checkpoint path
     task_name = args_cli.task.split(":")[-1]
     train_task_name = task_name.replace("-Play", "")
@@ -86,7 +179,6 @@ def main(env_cfg: ManagerBasedRLEnvCfg, agent_cfg: HIMOnPolicyRunnerCfg):
     env_cfg.scene.num_envs = args_cli.num_envs if args_cli.num_envs is not None else env_cfg.scene.num_envs
 
     # set the environment seed
-    # note: certain randomizations occur in the environment initialization so we set the seed here
     env_cfg.seed = agent_cfg.seed
     env_cfg.sim.device = args_cli.device if args_cli.device is not None else env_cfg.sim.device
 
@@ -103,6 +195,23 @@ def main(env_cfg: ManagerBasedRLEnvCfg, agent_cfg: HIMOnPolicyRunnerCfg):
 
     log_dir = os.path.dirname(resume_path)
 
+    # determine ONNX model directory
+    if args_cli.onnx_dir:
+        onnx_dir = args_cli.onnx_dir
+    else:
+        onnx_dir = os.path.join(os.path.dirname(resume_path), "exported")
+    
+    encoder_path = os.path.join(onnx_dir, "encoder.onnx")
+    policy_path = os.path.join(onnx_dir, "policy.onnx")
+    
+    # verify ONNX files exist
+    if not os.path.exists(encoder_path):
+        raise FileNotFoundError(f"Encoder ONNX model not found: {encoder_path}")
+    if not os.path.exists(policy_path):
+        raise FileNotFoundError(f"Policy ONNX model not found: {policy_path}")
+    
+    print(f"[INFO] Using ONNX models from: {onnx_dir}")
+
     # set the log directory for the environment
     env_cfg.log_dir = log_dir
 
@@ -112,7 +221,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg, agent_cfg: HIMOnPolicyRunnerCfg):
     # wrap for video recording
     if args_cli.video:
         video_kwargs = {
-            "video_folder": os.path.join(log_dir, "videos", "play"),
+            "video_folder": os.path.join(log_dir, "videos", "play_onnx"),
             "step_trigger": lambda step: step == 0,
             "video_length": args_cli.video_length,
             "disable_logger": True,
@@ -139,35 +248,20 @@ def main(env_cfg: ManagerBasedRLEnvCfg, agent_cfg: HIMOnPolicyRunnerCfg):
         print(f"[INFO] num_privileged_obs (total): {env.num_privileged_obs}")
     print(f"[INFO] num_actions: {env.num_actions}")
 
-    print(f"[INFO]: Loading model checkpoint from: {resume_path}")
-    
-    # Export deployment configuration with history_length and use_encoder flag
-    export_deploy_cfg(
-        env.unwrapped, 
-        log_dir,
-        history_length=agent_cfg.history_length,
-        use_encoder=True  # HimLoco uses dual network architecture
+    # create ONNX policy
+    policy = ONNXPolicy(
+        encoder_path=encoder_path,
+        policy_path=policy_path,
+        device=env.device
     )
-    
-    # create runner from HimLoco RSL-RL
-    runner = HIMOnPolicyRunner(env, agent_cfg.to_dict(), log_dir=None, device=agent_cfg.device)
-    
-    # load the checkpoint
-    runner.load(resume_path)
 
-    # obtain the trained policy for inference
-    policy = runner.get_inference_policy(device=env.device)
-
-    # export HimLoco dual network (encoder + policy) to ONNX
-    export_model_dir = os.path.join(os.path.dirname(resume_path), "exported")
-    print(f"[INFO] Exporting HimLoco dual network to: {export_model_dir}")
-    export_himloco_policy_as_onnx(
-        runner.alg.actor_critic,
-        path=export_model_dir,
-        encoder_filename="encoder.onnx",
-        policy_filename="policy.onnx",
-        verbose=False
-    )
+    print(f"[INFO] ONNX policy loaded successfully")
+    print(f"[INFO] Expected observation format:")
+    print(f"  - Total obs dim: {env.num_obs}")
+    print(f"  - Encoder input dim: {policy.encoder_input_dim}")
+    print(f"  - Current obs dim: {env.num_obs - policy.encoder_input_dim}")
+    print(f"  - Encoder output dim: {policy.encoder_output_dim}")
+    print(f"  - Action dim: {policy.policy_output_dim}")
 
     dt = env.unwrapped.step_dt
 
@@ -176,13 +270,14 @@ def main(env_cfg: ManagerBasedRLEnvCfg, agent_cfg: HIMOnPolicyRunnerCfg):
     timestep = 0
     
     # simulate environment
-    print("[INFO] Starting playback...")
+    print("[INFO] Starting ONNX model verification playback...")
     while simulation_app.is_running():
         start_time = time.time()
         # run everything in inference mode
         with torch.inference_mode():
-            # agent stepping
+            # Run ONNX policy
             actions = policy(obs)
+            
             # env stepping
             obs, privileged_obs, rewards, dones, infos, termination_ids, termination_privileged_obs = env.step(actions)
         
@@ -199,6 +294,8 @@ def main(env_cfg: ManagerBasedRLEnvCfg, agent_cfg: HIMOnPolicyRunnerCfg):
 
     # close the simulator
     env.close()
+    
+    print("[INFO] ONNX model verification completed successfully!")
 
 
 if __name__ == "__main__":

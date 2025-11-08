@@ -8,6 +8,7 @@
 import copy
 import os
 import torch
+import torch.nn.functional as F
 
 
 def export_himloco_policy_as_onnx(
@@ -49,7 +50,6 @@ class _HimlocoEncoderOnnxExporter(torch.nn.Module):
         self.verbose = verbose
         # Copy encoder from estimator
         self.encoder = copy.deepcopy(actor_critic.estimator.encoder)
-        self.num_actor_obs = actor_critic.num_actor_obs
         
     def forward(self, obs_history):
         """Forward pass: obs_history -> [vel, latent]
@@ -60,14 +60,29 @@ class _HimlocoEncoderOnnxExporter(torch.nn.Module):
         Returns:
             encoder_output: [vel(3) + latent(16)] concatenated output [batch, 19]
         """
-        return self.encoder(obs_history)
+        import torch.nn.functional as F
+        
+        # Run encoder network
+        parts = self.encoder(obs_history)
+        
+        # Split into vel and latent
+        vel = parts[..., :3]
+        z = parts[..., 3:]
+        
+        # Normalize latent representation (L2 normalization)
+        z = F.normalize(z, dim=-1, p=2)
+        
+        # Concatenate vel and normalized latent
+        encoder_output = torch.cat([vel, z], dim=-1)
+        
+        return encoder_output
     
     def export(self, path, filename):
         self.to("cpu")
         self.eval()
         
         # Create dummy input: obs_history
-        obs_history = torch.zeros(1, self.num_actor_obs)
+        obs_history = torch.zeros(1, self.encoder[0].in_features)
         
         torch.onnx.export(
             self,
@@ -90,7 +105,6 @@ class _HimlcoPolicyOnnxExporter(torch.nn.Module):
         self.verbose = verbose
         # Copy actor network
         self.actor = copy.deepcopy(actor_critic.actor)
-        self.num_one_step_obs = actor_critic.num_one_step_obs
         
     def forward(self, obs):
         """Forward pass: [current_obs + vel + latent] -> actions
@@ -108,9 +122,7 @@ class _HimlcoPolicyOnnxExporter(torch.nn.Module):
         self.to("cpu")
         self.eval()
         
-        # Create dummy input: current_obs(num_one_step_obs) + vel(3) + latent(16)
-        policy_input_dim = self.num_one_step_obs + 3 + 16
-        obs = torch.zeros(1, policy_input_dim)
+        obs = torch.zeros(1, self.actor[0].in_features)
         
         torch.onnx.export(
             self,

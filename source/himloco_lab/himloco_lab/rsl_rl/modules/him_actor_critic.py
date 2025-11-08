@@ -205,6 +205,12 @@ class HIMActorCritic(nn.Module):
         vel, latent = self.estimator(obs_history)
         actions_mean = self.actor(torch.cat((obs_history[:,:self.num_one_step_obs], vel, latent), dim=-1))
         return actions_mean
+    
+    def test_inference(self, obs_history, observations=None):
+        vel, latent = self.estimator(obs_history)
+        actions_mean = self.actor(torch.cat((obs_history[:,:self.num_one_step_obs], vel, latent), dim=-1))
+        estimator_output = torch.cat((vel, latent), dim=-1)
+        return actions_mean, estimator_output
 
     def evaluate(self, critic_observations, **kwargs):
         value = self.critic(critic_observations)
