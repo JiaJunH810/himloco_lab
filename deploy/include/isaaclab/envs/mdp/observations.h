@@ -4,6 +4,7 @@
 #pragma once
 
 #include "isaaclab/envs/manager_based_rl_env.h"
+#include "isaaclab/devices/keyboard/keyboard.h"
 
 namespace isaaclab
 {
@@ -92,5 +93,62 @@ REGISTER_OBSERVATION(gait_phase)
     return obs;
 }
 
+REGISTER_OBSERVATION(keyboard_velocity_commands)
+{
+    static Keyboard keyboard;
+    static std::vector<float> velocity(3, 0.0f);
+    
+    keyboard.update();
+    
+    auto cfg = env->cfg["commands"]["base_velocity"]["ranges"];
+    float max_lin_vel_x = cfg["lin_vel_x"][1].as<float>();
+    float min_lin_vel_x = cfg["lin_vel_x"][0].as<float>();
+    float max_lin_vel_y = cfg["lin_vel_y"][1].as<float>();
+    float min_lin_vel_y = cfg["lin_vel_y"][0].as<float>();
+    float max_ang_vel_z = cfg["ang_vel_z"][1].as<float>();
+    float min_ang_vel_z = cfg["ang_vel_z"][0].as<float>();
+    
+    float speed_step = 0.1f; // 速度增量
+    
+    std::string key = keyboard.key();
+    
+    // 前后控制 (W/S 或 上/下方向键)
+    if(key == "w" || key == "up") {
+        velocity[0] = std::min(velocity[0] + speed_step, max_lin_vel_x);
+    }
+    else if(key == "s" || key == "down") {
+        velocity[0] = std::max(velocity[0] - speed_step, min_lin_vel_x);
+    }
+    
+    // 左右平移控制 (A/D 或 左/右方向键)
+    if(key == "a" || key == "left") {
+        velocity[1] = std::min(velocity[1] + speed_step, max_lin_vel_y);
+    }
+    else if(key == "d" || key == "right") {
+        velocity[1] = std::max(velocity[1] - speed_step, min_lin_vel_y);
+    }
+    
+    // 旋转控制 (Q/E)
+    if(key == "q") {
+        velocity[2] = std::min(velocity[2] + speed_step, max_ang_vel_z);
+    }
+    else if(key == "e") {
+        velocity[2] = std::max(velocity[2] - speed_step, min_ang_vel_z);
+    }
+    
+    // 空格键：停止所有运动
+    if(key == " ") {
+        velocity[0] = 0.0f;
+        velocity[1] = 0.0f;
+        velocity[2] = 0.0f;
+    }
+    
+    // 应用约束
+    velocity[0] = std::clamp(velocity[0], min_lin_vel_x, max_lin_vel_x);
+    velocity[1] = std::clamp(velocity[1], min_lin_vel_y, max_lin_vel_y);
+    velocity[2] = std::clamp(velocity[2], min_ang_vel_z, max_ang_vel_z);
+    
+    return velocity;
+}
 }
 }

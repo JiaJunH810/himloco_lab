@@ -48,12 +48,8 @@ public:
             term.reset(term.func(this->env));
         }
         // Clear and reinitialize history buffer with zeros
-        obs_history_buffer.clear();
-        // Pre-fill buffer with zero observations so first step gets 6-step history with zeros
-        std::vector<float> zero_obs(get_obs_dim(), 0.0f);
-        for (int i = 0; i < history_length; ++i) {
-            obs_history_buffer.push_back(zero_obs);
-        }
+        // Buffer stores [current, history1, ..., historyN-1] in flattened form
+        obs_history_buffer.assign(num_one_step_obs * history_length, 0.0f);
     }
 
     std::vector<float> compute()
@@ -81,65 +77,46 @@ public:
             current_obs.insert(current_obs.end(), term_obs.begin(), term_obs.end());
         }
         
-        
-        // Step 2: Add current observation to history buffer with sliding window
-        if (obs_history_buffer.size() >= (size_t)history_length) {
-            obs_history_buffer.pop_front();
+        // Step 2: Update flattened history buffer
+        // Shift old data: [current, hist1, hist2, ..., histN-1] -> [_, hist1, hist2, ..., histN-1]
+        // Then insert new current at front
+        if (history_length > 1) {
+            std::copy(obs_history_buffer.begin(), 
+                     obs_history_buffer.begin() + num_one_step_obs * (history_length - 1),
+                     obs_history_buffer.begin() + num_one_step_obs);
         }
-        obs_history_buffer.push_back(current_obs);
+        std::copy(current_obs.begin(), current_obs.end(), obs_history_buffer.begin());
         
-        // Step 3: Stack observations - order: [current, history1, history2, ..., historyN]
-        // This matches the training wrapper stacking order
-        std::vector<float> stacked_obs;
-        stacked_obs.insert(stacked_obs.end(), current_obs.begin(), current_obs.end());
-        
-        // Add historical observations (oldest to newest before current)
-        std::vector<std::vector<float>> history_stack(obs_history_buffer.begin(), obs_history_buffer.end());
-        if (history_stack.size() > 1) {
-            // Skip the last one (current obs) and add the rest
-            for (size_t i = 0; i < history_stack.size() - 1; ++i) {
-                stacked_obs.insert(stacked_obs.end(), history_stack[i].begin(), history_stack[i].end());
-            }
-        }
-        
-        
-        return stacked_obs;
+        return obs_history_buffer;
     }
 
     YAML::Node cfg;
     ManagerBasedRLEnv* env;
     int history_length;
-    std::deque<std::vector<float>> obs_history_buffer;
+    std::vector<float> obs_history_buffer;  // [current, prev, prev-1, ...]
+    size_t num_one_step_obs;  // Dimension of one step observation
     
     // Get observation dimension (sum of all term dimensions)
     size_t get_obs_dim() const
     {
-        size_t total_dim = 0;
-        for (const auto& term_cfg : obs_term_cfgs) {
-            auto sample_obs = term_cfg.func(const_cast<ManagerBasedRLEnv*>(env));
-            total_dim += sample_obs.size();
-        }
-        return total_dim;
+        return num_one_step_obs * history_length;
     }
     
 private:
     void _initialize_history_buffer()
     {
         // Get the observation dimension from terms
-        size_t obs_dim = 0;
+        num_one_step_obs = 0;
         for (const auto& term_cfg : obs_term_cfgs) {
             auto sample_obs = term_cfg.func(env);
-            obs_dim += sample_obs.size();
+            num_one_step_obs += sample_obs.size();
         }
         
-        // Pre-fill buffer with zero observations
-        std::vector<float> zero_obs(obs_dim, 0.0f);
-        obs_history_buffer.clear();
-        for (int i = 0; i < history_length; ++i) {
-            obs_history_buffer.push_back(zero_obs);
-        }
+        // Pre-fill flattened buffer with zeros
+        obs_history_buffer.assign(num_one_step_obs * history_length, 0.0f);
 
-        spdlog::info("History buffer initialized with {} zero observations (dim={})", history_length, get_obs_dim());
+        spdlog::info("History buffer initialized: history_length={}, one_step_dim={}, total_dim={}", 
+                     history_length, num_one_step_obs, get_obs_dim());
     }
 
     void _prapare_terms()
