@@ -57,6 +57,7 @@ import himloco_lab.tasks  # noqa: F401
 from himloco_lab.rsl_rl import HIMOnPolicyRunner, HimlocoVecEnvWrapper
 from himloco_lab.rsl_rl.config import HIMOnPolicyRunnerCfg
 from isaaclab_tasks.utils.hydra import hydra_task_config
+from himloco_lab.utils import export_deploy_cfg
 
 torch.backends.cuda.matmul.allow_tf32 = True
 torch.backends.cudnn.allow_tf32 = True
@@ -147,6 +148,14 @@ def main(env_cfg: ManagerBasedRLEnvCfg, agent_cfg: HIMOnPolicyRunnerCfg):
     dump_pickle(os.path.join(log_dir, "params", "env.pkl"), env_cfg)
     dump_pickle(os.path.join(log_dir, "params", "agent.pkl"), agent_cfg)
     
+    # Export deployment configuration with history_length and use_encoder flag
+    export_deploy_cfg(
+        env.unwrapped, 
+        log_dir,
+        history_length=agent_cfg.history_length,
+        use_encoder=True  # HimLoco uses dual network architecture
+    )
+     
     shutil.copy(
         inspect.getfile(env_cfg.__class__),
         os.path.join(log_dir, "params", os.path.basename(inspect.getfile(env_cfg.__class__))),

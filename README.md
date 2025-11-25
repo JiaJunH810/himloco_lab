@@ -1,135 +1,184 @@
-# Template for Isaac Lab Projects
+# HimLoco Lab
 
-## Overview
+## Project Overview
 
-This project/repository serves as a template for building projects or extensions based on Isaac Lab.
-It allows you to develop in an isolated environment, outside of the core Isaac Lab repository.
+This project ports **HimLoco** from **IsaacGym** to **Isaac Lab**.
 
-**Key Features:**
+HimLoco is a reinforcement learning-based quadruped robot gait controller with a dual-network architecture. Through this project, you can train, export, and deploy HimLoco policies in the Isaac Lab environment.
 
-- `Isolation` Work outside the core Isaac Lab repository, ensuring that your development efforts remain self-contained.
-- `Flexibility` This template is set up to allow your code to be run as an extension in Omniverse.
+## Project Structure
 
-**Keywords:** extension, template, isaaclab
+```
+himloco_lab/
+├── scripts/                          # Script files
+│   ├── himloco_rsl_rl/
+│   │   ├── train.py                  # Training script
+│   │   ├── play.py                   # Batch inference and policy export
+│   │   ├── play_interactive.py       # Interactive control script
+│   │   └── cli_args.py               
+│   ├── list_envs.py                  # List available environments
+│   ├── zero_agent.py                 
+│   └── random_agent.py               
+│
+├── source/himloco_lab/               # Main source code
+│   └── himloco_lab/
+│       ├── tasks/                    # Task definitions
+│       │   └── locomotion/
+│       │       ├── mdp/              # Observations, actions, rewards, terminations
+│       │       └── robots/go2/       # Training configuration
+│       │
+│       ├── rsl_rl/                   # HimLoco algorithm implementation
+│       │   ├── config/               # Algorithm configuration
+│       │   ├── modules/              # HIMActorCritic, HIMEstimator networks
+│       │   ├── algorithms/           # HIMOnPolicyRunner training logic
+│       │   ├── wrappers/             # HimlocoVecEnvWrapper environment adapter for IsaacLab
+│       │   └── env/                  # VecEnv interface
+│       │
+│       ├── utils/                    # Utility functions
+│       │   └── export_policy.py      # JIT and ONNX export tools
+│       │
+│       └── assets/                   # Asset files
+│           └── unitree/              # Unitree Go2 URDF and configuration
+│
+├── deploy/                           # Robot deployment code
+│   └── robots/go2/                   # Go2 controller implementation
+│
+└── README.md                         # This file
+```
 
-## Installation
+## Algorithm Overview
+[HimLoco](https://github.com/InternRobotics/HIMLoco/blob/main/projects/himloco/README.md)
+![HimLoco](https://github.com/InternRobotics/HIMLoco/blob/main/assets/overview.jpeg)
 
-- Install Isaac Lab by following the [installation guide](https://isaac-sim.github.io/IsaacLab/main/source/setup/installation/index.html).
-  We recommend using the conda or uv installation as it simplifies calling Python scripts from the terminal.
+## 📚 Installation Guide
 
-- Clone or copy this project/repository separately from the Isaac Lab installation (i.e. outside the `IsaacLab` directory):
+### 1. Install Isaac Lab
 
-- Using a python interpreter that has Isaac Lab installed, install the library in editable mode using:
+Follow the [official installation guide](https://isaac-sim.github.io/IsaacLab/main/source/setup/installation/pip_installation.html) to install Isaac Lab.
+We recommend using the pip installation method.
 
-    ```bash
-    # use 'PATH_TO_isaaclab.sh|bat -p' instead of 'python' if Isaac Lab is not installed in Python venv or conda
-    python -m pip install -e source/himloco_lab
+### 2. Clone This Repository
 
-- Verify that the extension is correctly installed by:
-
-    - Listing the available tasks:
-
-        Note: It the task name changes, it may be necessary to update the search pattern `"Template-"`
-        (in the `scripts/list_envs.py` file) so that it can be listed.
-
-        ```bash
-        # use 'FULL_PATH_TO_isaaclab.sh|bat -p' instead of 'python' if Isaac Lab is not installed in Python venv or conda
-        python scripts/list_envs.py
-        ```
-
-    - Running a task:
-
-        ```bash
-        # use 'FULL_PATH_TO_isaaclab.sh|bat -p' instead of 'python' if Isaac Lab is not installed in Python venv or conda
-        python scripts/<RL_LIBRARY>/train.py --task=<TASK_NAME>
-        ```
-
-    - Running a task with dummy agents:
-
-        These include dummy agents that output zero or random agents. They are useful to ensure that the environments are configured correctly.
-
-        - Zero-action agent
-
-            ```bash
-            # use 'FULL_PATH_TO_isaaclab.sh|bat -p' instead of 'python' if Isaac Lab is not installed in Python venv or conda
-            python scripts/zero_agent.py --task=<TASK_NAME>
-            ```
-        - Random-action agent
-
-            ```bash
-            # use 'FULL_PATH_TO_isaaclab.sh|bat -p' instead of 'python' if Isaac Lab is not installed in Python venv or conda
-            python scripts/random_agent.py --task=<TASK_NAME>
-            ```
-
-### Set up IDE (Optional)
-
-To setup the IDE, please follow these instructions:
-
-- Run VSCode Tasks, by pressing `Ctrl+Shift+P`, selecting `Tasks: Run Task` and running the `setup_python_env` in the drop down menu.
-  When running this task, you will be prompted to add the absolute path to your Isaac Sim installation.
-
-If everything executes correctly, it should create a file .python.env in the `.vscode` directory.
-The file contains the python paths to all the extensions provided by Isaac Sim and Omniverse.
-This helps in indexing all the python modules for intelligent suggestions while writing code.
-
-### Setup as Omniverse Extension (Optional)
-
-We provide an example UI extension that will load upon enabling your extension defined in `source/himloco_lab/himloco_lab/ui_extension_example.py`.
-
-To enable your extension, follow these steps:
-
-1. **Add the search path of this project/repository** to the extension manager:
-    - Navigate to the extension manager using `Window` -> `Extensions`.
-    - Click on the **Hamburger Icon**, then go to `Settings`.
-    - In the `Extension Search Paths`, enter the absolute path to the `source` directory of this project/repository.
-    - If not already present, in the `Extension Search Paths`, enter the path that leads to Isaac Lab's extension directory directory (`IsaacLab/source`)
-    - Click on the **Hamburger Icon**, then click `Refresh`.
-
-2. **Search and enable your extension**:
-    - Find your extension under the `Third Party` category.
-    - Toggle it to enable your extension.
-
-## Code formatting
-
-We have a pre-commit template to automatically format your code.
-To install pre-commit:
+Clone this repository into a separate directory outside of Isaac Lab:
 
 ```bash
-pip install pre-commit
+git clone https://github.com/IsaacZH/himloco_lab.git
+cd himloco_lab
 ```
 
-Then you can run pre-commit with:
+### 3. Install HimLoco Lab
 
 ```bash
-pre-commit run --all-files
+python -m pip install -e source/himloco_lab
 ```
 
-## Troubleshooting
+## Quick Start
 
-### Pylance Missing Indexing of Extensions
+### Train Policy
 
-In some VsCode versions, the indexing of part of the extensions is missing.
-In this case, add the path to your extension in `.vscode/settings.json` under the key `"python.analysis.extraPaths"`.
+Train a HimLoco policy on Unitree Go2:
 
-```json
-{
-    "python.analysis.extraPaths": [
-        "<path-to-ext-repo>/source/himloco_lab"
-    ]
-}
+```bash
+python scripts/himloco_rsl_rl/train.py --task Unitree-Go2-Velocity --headless
 ```
 
-### Pylance Crash
+### Inference and Playback
 
-If you encounter a crash in `pylance`, it is probable that too many files are indexed and you run out of memory.
-A possible solution is to exclude some of omniverse packages that are not used in your project.
-To do so, modify `.vscode/settings.json` and comment out packages under the key `"python.analysis.extraPaths"`
-Some examples of packages that can likely be excluded are:
+Run a trained policy for batch inference:
 
-```json
-"<path-to-isaac-sim>/extscache/omni.anim.*"         // Animation packages
-"<path-to-isaac-sim>/extscache/omni.kit.*"          // Kit UI tools
-"<path-to-isaac-sim>/extscache/omni.graph.*"        // Graph UI tools
-"<path-to-isaac-sim>/extscache/omni.services.*"     // Services tools
-...
+```bash
+python scripts/himloco_rsl_rl/play.py --task Unitree-Go2-Velocity-Play
 ```
+
+### Interactive Control
+
+Use keyboard to control the robot in real-time in IsaacLab:
+
+```bash
+# Launch interactive control
+python scripts/himloco_rsl_rl/play_interactive.py --task Unitree-Go2-Velocity-Play
+
+# Keyboard controls:
+#   Numpad 8 / ↑   : Move forward
+#   Numpad 2 / ↓   : Move backward
+#   Numpad 4 / ←   : Strafe right
+#   Numpad 6 / →   : Strafe left
+#   Numpad 7 / Z   : Rotate counter-clockwise
+#   Numpad 9 / X   : Rotate clockwise
+```
+
+### Model Export
+
+Export trained models for deployment:
+
+```bash
+python scripts/himloco_rsl_rl/play.py --task Unitree-Go2-Velocity-Play 
+```
+
+The script generates files in the log directory, including:
+- `policy.pt` - TorchScript JIT model (single file deployment)
+- `encoder.onnx` & `policy.onnx` - ONNX format (separate models)
+
+## Deployment Guide
+
+After model training, you need to verify the trained policy in Mujoco (Sim2Sim) to test model performance.
+Only then can you proceed to real robot deployment (Sim2Real).
+
+### Environment Setup
+
+```bash
+# Install dependencies
+sudo apt install -y libyaml-cpp-dev libboost-all-dev libeigen3-dev libspdlog-dev libfmt-dev
+
+# Install unitree_sdk2
+git clone git@github.com:unitreerobotics/unitree_sdk2.git
+cd unitree_sdk2
+mkdir build && cd build
+cmake .. -DBUILD_EXAMPLES=OFF # Install to /usr/local directory
+sudo make install
+# Compile the robot_controller
+cd himloco_lab/deploy/robots/go2 
+mkdir build && cd build
+cmake .. && make
+```
+
+### Sim2Sim
+
+Install [unitree_mujoco](https://github.com/unitreerobotics/unitree_mujoco?tab=readme-ov-file#installation).
+
+- Set the `robot` at `/simulate/config.yaml` to go2
+- Set `domain_id` to 0
+- Set `enable_elastic_hand` to 1
+- Set `use_joystck` to 1.
+
+Launch Mujoco simulation environment:
+```bash
+cd unitree_mujoco/simulate/build
+./unitree_mujoco
+```
+
+Launch the controller:
+
+```bash
+cd himloco_lab/deploy/robots/go2/build
+./go2_ctrl
+```
+
+### Sim2Real
+
+You can use this program to directly control the real robot, but make sure the robot's motion controller is disabled.
+
+```bash
+./go2_ctrl --network eth0 # eth0 is the network interface name.
+```
+
+## 📝 TODO List
+- \[x\] deploy on real robot and mujoco
+- \[ \] deploy on jetson
+- \[ \] migrate to latest rsl_rl version
+
+## 🔗 References
+
+- [HimLoco](https://github.com/RoboLoco/HimLoco)
+- [Isaac Lab](https://isaac-sim.github.io/IsaacLab/)
+- [unitree_rl_lab](https://github.com/unitreerobotics/unitree_rl_lab)
