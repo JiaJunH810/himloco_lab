@@ -108,11 +108,10 @@ REGISTER_OBSERVATION(keyboard_velocity_commands)
     float max_ang_vel_z = cfg["ang_vel_z"][1].as<float>();
     float min_ang_vel_z = cfg["ang_vel_z"][0].as<float>();
     
-    float speed_step = 0.1f; // 速度增量
+    float speed_step = 0.1f;
     
     std::string key = keyboard.key();
     
-    // 前后控制 (W/S 或 上/下方向键)
     if(key == "w" || key == "up") {
         velocity[0] = std::min(velocity[0] + speed_step, max_lin_vel_x);
     }
@@ -120,7 +119,6 @@ REGISTER_OBSERVATION(keyboard_velocity_commands)
         velocity[0] = std::max(velocity[0] - speed_step, min_lin_vel_x);
     }
     
-    // 左右平移控制 (A/D 或 左/右方向键)
     if(key == "a" || key == "left") {
         velocity[1] = std::min(velocity[1] + speed_step, max_lin_vel_y);
     }
@@ -128,7 +126,6 @@ REGISTER_OBSERVATION(keyboard_velocity_commands)
         velocity[1] = std::max(velocity[1] - speed_step, min_lin_vel_y);
     }
     
-    // 旋转控制 (Q/E)
     if(key == "q") {
         velocity[2] = std::min(velocity[2] + speed_step, max_ang_vel_z);
     }
@@ -136,14 +133,12 @@ REGISTER_OBSERVATION(keyboard_velocity_commands)
         velocity[2] = std::max(velocity[2] - speed_step, min_ang_vel_z);
     }
     
-    // 空格键：停止所有运动
     if(key == " ") {
         velocity[0] = 0.0f;
         velocity[1] = 0.0f;
         velocity[2] = 0.0f;
     }
     
-    // 应用约束
     velocity[0] = std::clamp(velocity[0], min_lin_vel_x, max_lin_vel_x);
     velocity[1] = std::clamp(velocity[1], min_lin_vel_y, max_lin_vel_y);
     velocity[2] = std::clamp(velocity[2], min_ang_vel_z, max_ang_vel_z);

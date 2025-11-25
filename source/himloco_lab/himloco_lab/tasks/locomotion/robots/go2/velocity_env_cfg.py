@@ -198,17 +198,17 @@ class EventCfg:
     )
 
     # interval
-    # external_force = EventTerm(
-    #     func=mdp.apply_periodic_external_force_torque,
-    #     mode="interval",
-    #     interval_range_s=(0.02, 0.02),
-    #     params={
-    #         "period_step": 8,
-    #         "force_range": (-30.0, 30.0),
-    #         "torque_range": (-0.0, 0.0),
-    #         "asset_cfg": SceneEntityCfg("robot", body_names="base"),
-    #     },
-    # )
+    external_force = EventTerm(
+        func=mdp.apply_periodic_external_force_torque,
+        mode="interval",
+        interval_range_s=(0.02, 0.02),
+        params={
+            "period_step": 8,
+            "force_range": (-30.0, 30.0),
+            "torque_range": (-0.0, 0.0),
+            "asset_cfg": SceneEntityCfg("robot", body_names="base"),
+        },
+    )
     push_robot = EventTerm(
         func=mdp.push_by_setting_velocity,
         mode="interval",
@@ -352,28 +352,28 @@ class RewardsCfg:
     # joint_torques = RewTerm(func=mdp.joint_torques_l2, weight=-2e-4)
     # joint_vel = RewTerm(func=mdp.joint_vel_l2, weight=-0.001)
     
-    head_undesired_contacts = RewTerm(
-        func=mdp.undesired_contacts,
-        weight=-1,
-        params={
-            "threshold": 0.3,
-            "sensor_cfg": SceneEntityCfg("contact_forces", body_names=["Head_.*"]),
-        },
-    )
+    # head_undesired_contacts = RewTerm(
+    #     func=mdp.undesired_contacts,
+    #     weight=-1,
+    #     params={
+    #         "threshold": 0.3,
+    #         "sensor_cfg": SceneEntityCfg("contact_forces", body_names=["Head_.*"]),
+    #     },
+    # )
     
-    other_undesired_contacts = RewTerm(
-        func=mdp.undesired_contacts,
-        weight=-0.01,
-        params={
-            "threshold": 0.3,
-            "sensor_cfg": SceneEntityCfg("contact_forces", body_names=[".*_hip", ".*_thigh", ".*_calf"]),
-        },
-    )
+    # other_undesired_contacts = RewTerm(
+    #     func=mdp.undesired_contacts,
+    #     weight=-0.01,
+    #     params={
+    #         "threshold": 0.3,
+    #         "sensor_cfg": SceneEntityCfg("contact_forces", body_names=[".*_hip", ".*_thigh", ".*_calf"]),
+    #     },
+    # )
 
     # is_terminated = RewTerm(func=mdp.is_terminated, weight=-5.0)
-    joint_pos_limits = RewTerm(func=mdp.joint_pos_limits, weight=-10.0)
+    # joint_pos_limits = RewTerm(func=mdp.joint_pos_limits, weight=-5.0)
     # joint_vel_limits = RewTerm(func=mdp.joint_vel_limits, weight=-5.0)
-    # applied_torque_limits = RewTerm(func=mdp.applied_torque_limits, weight=-0.1)
+    # applied_torque_limits = RewTerm(func=mdp.applied_torque_limits, weight=-5.0)
     
     # feet_air_time = RewTerm(
     #     func=mdp.feet_air_time,
@@ -416,11 +416,11 @@ class RewardsCfg:
 ####################################################################################
 
     # # -- feet
-    air_time_variance = RewTerm(
-        func=mdp.air_time_variance_penalty,
-        weight=-1.0,
-        params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_foot")},
-    )
+    # air_time_variance = RewTerm(
+    #     func=mdp.air_time_variance_penalty,
+    #     weight=-1.0,
+    #     params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_foot")},
+    # )
     # feet_slide = RewTerm(
     #     func=mdp.feet_slide,
     #     weight=-0.1,
@@ -528,10 +528,10 @@ class RobotPlayEnvCfg(RobotEnvCfg):
         self.scene.terrain.max_init_terrain_level = 10
         self.scene.terrain.terrain_generator.curriculum = True
         self.commands.base_velocity.heading_command = False
-        # self.commands.base_velocity.ranges = mdp.UniformLevelVelocityCommandCfg.Ranges(
-        #     lin_vel_x=(1, 1), lin_vel_y=(-0.0, 0.0), ang_vel_z=(-0, 0), 
-        # )
-        # self.commands.base_velocity.low_vel_env_lin_x_ranges=(1,1)
+        self.commands.base_velocity.ranges = mdp.UniformLevelVelocityCommandCfg.Ranges(
+            lin_vel_x=(1, 1), lin_vel_y=(-0.0, 0.0), ang_vel_z=(-0, 0), 
+        )
+        self.commands.base_velocity.low_vel_env_lin_x_ranges=(1,1)
         
         # Disable randomization events for play mode
         self.events.add_base_mass = None

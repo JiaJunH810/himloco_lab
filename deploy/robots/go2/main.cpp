@@ -41,14 +41,19 @@ int main(int argc, char** argv)
     // Initialize keyboard input
     FSMState::keyboard = std::make_shared<Keyboard>();
 
+    // Get joystick reference
+    auto& joy = FSMState::lowstate->joystick;
+
     // Initialize FSM
     auto fsm = std::make_unique<CtrlFSM>(new State_Passive(FSMMode::Passive));
     
-    // Transition from Passive to FixStand on 'F' key
+    // Transition from Passive to FixStand: Keyboard [Z] OR Joystick [L2 + A]
     fsm->states.back()->registered_checks.emplace_back(
         std::make_pair(
             [&]()->bool{ 
-                return FSMState::keyboard->key() == "f" && FSMState::keyboard->on_pressed;
+                bool keyboard_input = FSMState::keyboard->key() == "z" && FSMState::keyboard->on_pressed;
+                bool joystick_input = joy.LT.pressed && joy.A.on_pressed;
+                return keyboard_input || joystick_input;
             }, 
             (int)FSMMode::FixStand
         )
@@ -56,32 +61,42 @@ int main(int argc, char** argv)
     
     fsm->add(new State_FixStand(FSMMode::FixStand));
     
-    // Transition from FixStand to RLBase on 'S' key
+    // Transition from FixStand to Velocity: Keyboard [X] OR Joystick [Start]
     fsm->states.back()->registered_checks.emplace_back(
         std::make_pair(
             [&]()->bool{ 
-                return FSMState::keyboard->key() == "s" && FSMState::keyboard->on_pressed;
+                bool keyboard_input = FSMState::keyboard->key() == "x" && FSMState::keyboard->on_pressed;
+                bool joystick_input = joy.start.on_pressed;
+                return keyboard_input || joystick_input;
             }, 
             FSMMode::Velocity
         )
     );
     
-    // Transition from RLBase back to FixStand on 'Q' key
+    // Transition from Velocity back to Passive: Keyboard [C] OR Joystick [Back]
     fsm->add(new State_RLBase(FSMMode::Velocity, "Velocity"));
     fsm->states.back()->registered_checks.emplace_back(
         std::make_pair(
             [&]()->bool{ 
-                return FSMState::keyboard->key() == "q" && FSMState::keyboard->on_pressed;
+                bool keyboard_input = FSMState::keyboard->key() == "c" && FSMState::keyboard->on_pressed;
+                bool joystick_input = joy.back.on_pressed;
+                return keyboard_input || joystick_input;
             }, 
-            (int)FSMMode::FixStand
+            (int)FSMMode::Passive
         )
     );
 
-    std::cout << "\n=== Keyboard Control ===" << std::endl;
-    std::cout << "  [F] - Enter FixStand mode" << std::endl;
-    std::cout << "  [S] - Start RL control" << std::endl;
-    std::cout << "  [Q] - Stop RL control (return to FixStand)" << std::endl;
-    std::cout << "========================\n" << std::endl;
+    std::cout << "\n=== Control Methods ===" << std::endl;
+    std::cout << "\n--- Keyboard Control ---" << std::endl;
+    std::cout << "  [Z]     - Enter FixStand mode" << std::endl;
+    std::cout << "  [X]     - Start RL control" << std::endl;
+    std::cout << "  [C]     - Stop RL control (return to Passive)" << std::endl;
+    
+    std::cout << "\n--- Joystick Control ---" << std::endl;
+    std::cout << "  [L2 + A]    - Enter FixStand mode" << std::endl;
+    std::cout << "  [Start]     - Start RL control" << std::endl;
+    std::cout << "  [Back]      - Stop RL control (return to Passive)" << std::endl;
+    std::cout << "=======================\n" << std::endl;
 
     while (true)
     {
