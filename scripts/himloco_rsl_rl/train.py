@@ -51,7 +51,7 @@ from datetime import datetime
 
 from isaaclab.envs import ManagerBasedRLEnvCfg
 from isaaclab.utils.dict import print_dict
-from isaaclab.utils.io import dump_pickle, dump_yaml
+from isaaclab.utils.io import dump_yaml
 
 import himloco_lab.tasks  # noqa: F401
 from himloco_lab.rsl_rl import HIMOnPolicyRunner, HimlocoVecEnvWrapper
@@ -145,8 +145,6 @@ def main(env_cfg: ManagerBasedRLEnvCfg, agent_cfg: HIMOnPolicyRunnerCfg):
     # dump the configuration into log-directory
     dump_yaml(os.path.join(log_dir, "params", "env.yaml"), env_cfg)
     dump_yaml(os.path.join(log_dir, "params", "agent.yaml"), agent_cfg)
-    dump_pickle(os.path.join(log_dir, "params", "env.pkl"), env_cfg)
-    dump_pickle(os.path.join(log_dir, "params", "agent.pkl"), agent_cfg)
     
     # Export deployment configuration with history_length and use_encoder flag
     export_deploy_cfg(

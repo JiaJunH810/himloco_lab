@@ -71,6 +71,29 @@ cd himloco_lab
 ```bash
 python -m pip install -e source/himloco_lab
 ```
+### 4. Download unitree robot description files
+
+  *Method 1: Using USD Files*
+  - Download unitree usd files from [unitree_model](https://huggingface.co/datasets/unitreerobotics/unitree_model/tree/main), keeping folder structure
+    ```bash
+    git clone https://huggingface.co/datasets/unitreerobotics/unitree_model
+    ```
+  - Config `UNITREE_MODEL_DIR` in `source/himloco_lab/himloco_lab/assets/robots/unitree.py`.
+
+    ```bash
+    UNITREE_MODEL_DIR = "</home/user/projects/unitree_usd>"
+    ```
+
+  *Method 2: Using URDF Files [Recommended]* Only for Isaacsim >= 5.0
+  -  Download unitree robot urdf files from [unitree_ros](https://github.com/unitreerobotics/unitree_ros)
+      ```
+      git clone https://github.com/unitreerobotics/unitree_ros.git
+      ```
+  - Config `UNITREE_ROS_DIR` in `source/himloco_lab/himloco_lab/assets/robots/unitree.py`.
+    ```bash
+    UNITREE_ROS_DIR = "</home/user/projects/unitree_ros/unitree_ros>"
+    ```
+  - [Optional]: change *robot_cfg.spawn* if you want to use urdf/usd files
 
 ## Quick Start
 
@@ -174,7 +197,7 @@ You can use this program to directly control the real robot, but make sure the r
 
 ## 📝 TODO List
 - \[x\] deploy on real robot and mujoco
-- \[ \] deploy on jetson
+- \[x\] deploy on jetson
 - \[ \] migrate to latest rsl_rl version
 
 ## 🔗 References

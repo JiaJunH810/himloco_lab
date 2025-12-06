@@ -72,6 +72,30 @@ cd himloco_lab
 python -m pip install -e source/himloco_lab
 ```
 
+### 4. 下载 Unitree 机器人描述文件
+
+  *方法 1: 使用 USD 文件*
+  - 从 [unitree_model](https://huggingface.co/datasets/unitreerobotics/unitree_model/tree/main) 下载 unitree USD 文件，保持文件夹结构
+    ```bash
+    git clone https://huggingface.co/datasets/unitreerobotics/unitree_model
+    ```
+  - 配置 `UNITREE_MODEL_DIR` 在 `source/himloco_lab/himloco_lab/assets/robots/unitree.py` 中。
+
+    ```bash
+    UNITREE_MODEL_DIR = "</home/user/projects/unitree_usd>"
+    ```
+
+  *方法 2: 使用 URDF 文件 [推荐]* 仅支持 Isaacsim >= 5.0
+  -  从 [unitree_ros](https://github.com/unitreerobotics/unitree_ros) 下载 unitree 机器人 urdf 文件
+      ```
+      git clone https://github.com/unitreerobotics/unitree_ros.git
+      ```
+  - 配置 `UNITREE_ROS_DIR` 在 `source/himloco_lab/himloco_lab/assets/robots/unitree.py` 中。
+    ```bash
+    UNITREE_ROS_DIR = "</home/user/projects/unitree_ros/unitree_ros>"
+    ```
+  - [可选]: 如果要使用 urdf/usd 文件，修改 *robot_cfg.spawn*
+
 ## 快速开始
 
 ### 训练策略
@@ -175,7 +199,7 @@ cd himloco_lab/deploy/robots/go2/build
 
 ## 📝 TODO List
 - \[x\] deploy on real robot and mujoco
-- \[ \] deploy on jetson
+- \[x\] deploy on jetson
 - \[ \] migrate to latest rsl_rl version
 
 
