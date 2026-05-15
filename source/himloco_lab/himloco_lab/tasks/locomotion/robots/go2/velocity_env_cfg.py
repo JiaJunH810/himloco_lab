@@ -22,57 +22,68 @@ from himloco_lab.assets.unitree import UNITREE_GO2_CFG as ROBOT_CFG
 from himloco_lab.tasks.locomotion import mdp
 import himloco_lab.terrains as him_terrains
 
+# 鹅卵石路面地形配置
+# 用于训练四足机器人在多样化地形上的运动能力，包含斜坡、台阶、障碍物等多种地形类型
+# 按比例混合，每个地形块为8m x 8m，外围有25m的平坦边界
 COBBLESTONE_ROAD_CFG = terrain_gen.TerrainGeneratorCfg(
-    size=(8.0, 8.0),
-    border_width=25.0,
-    num_rows=10,  # number of difficulty levels
-    num_cols=20,  # number of terrain types
-    horizontal_scale=0.1,  # [m] grid resolution
-    vertical_scale=0.005,  # [m] height scale
-    slope_threshold=0.75,
-    difficulty_range=(0.0, 1.0),
-    use_cache=True,
+    # === 地形网格基础参数 ===
+    size=(8.0, 8.0),          # 每个地形块的尺寸 [m]（宽 x 长）
+    border_width=25.0,        # 地形外围平坦边界的宽度 [m]，边界内坡度为0
+    num_rows=10,              # 难度等级行数，从上到下难度递增（10个级别）
+    num_cols=20,              # 地形类型列数，每行随机生成20种不同类型的地形块
+    horizontal_scale=0.1,     # 高度场网格分辨率 [m]，越小越精细
+    vertical_scale=0.005,     # 高度缩放系数 [m]，乘到高度场上控制整体起伏幅度
+    slope_threshold=0.75,     # 坡度阈值，超过此值的三角面会应用不同的物理材质
+    difficulty_range=(0.0, 1.0),  # 难度映射范围，0.0=最简单, 1.0=最难，随行号线性递增
+    use_cache=True,           # 启用地形缓存，避免重复生成
+    # === 子地形类型及占比 ===
     sub_terrains={
+        # 上坡金字塔斜坡：中间有平台的凸起斜坡，向四周倾斜（占比 5%）
         "hf_pyramid_slope": terrain_gen.HfPyramidSlopedTerrainCfg(
-            proportion=0.05, 
-            slope_range=(0.0, 0.4),  
-            platform_width=3.0,  
-            border_width=0.0,
+            proportion=0.05,            # 占总地形的比例
+            slope_range=(0.0, 0.4),     # 坡度范围 [rad]，随难度递增
+            platform_width=3.0,         # 顶部平台的宽度 [m]
+            border_width=0.0,           # 斜坡区域的地形块内边距
         ),
+        # 下坡倒置金字塔斜坡：中间有平台的凹陷斜坡（占比 5%）
         "hf_pyramid_slope_inv": terrain_gen.HfInvertedPyramidSlopedTerrainCfg(
-            proportion=0.05, 
-            slope_range=(0.0, 0.4),  
-            platform_width=3.0,
-            border_width=0.0,  
-        ),
-        "hf_slope_with_noise": him_terrains.HfPyramidSlopeWithNoiseCfg(
-            proportion=0.2,
+            proportion=0.05,
             slope_range=(0.0, 0.4),
             platform_width=3.0,
             border_width=0.0,
-            noise_amplitude_range=(0.01, 0.08),
-            noise_step=0.005,
-            downsampled_scale=0.2,
         ),
+        # 带噪␟的粗糙斜坡：在金字塔斜坡上叠加了随机噪␟，模拟不规则路面（占比 20%）
+        "hf_slope_with_noise": him_terrains.HfPyramidSlopeWithNoiseCfg(
+            proportion=0.2,
+            slope_range=(0.0, 0.4),                     # 基础斜坡坡度范围
+            platform_width=3.0,
+            border_width=0.0,
+            noise_amplitude_range=(0.01, 0.08),          # 噪␟幅度范围 [m]，随难度增大
+            noise_step=0.005,                            # 噪␟采样步长 [m]
+            downsampled_scale=0.2,                       # 降采样后的水平分辨率 [m]
+        ),
+        # 金字塔台阶：一面有阶梯、另一面是斜坡的凸起地形（占比 30%）
         "pyramid_stairs": terrain_gen.MeshPyramidStairsTerrainCfg(
             proportion=0.3,
-            step_height_range=(0.05, 0.23),  # 0.05 + 0.18 * difficulty
-            step_width=0.30, 
-            platform_width=3.0, 
-            border_width=0.0,  
+            step_height_range=(0.05, 0.23),  # 台阶高度范围 [m]，实际高度 = 0.05 + 0.18 * difficulty
+            step_width=0.30,                 # 每级台阶的宽度 [m]
+            platform_width=3.0,              # 顶端平台宽度 [m]
+            border_width=0.0,
         ),
+        # 倒置金字塔台阶：凹陷到地面以下的阶梯状地形（占比 30%）
         "pyramid_stairs_inv": terrain_gen.MeshInvertedPyramidStairsTerrainCfg(
             proportion=0.3,
-            step_height_range=(0.05, 0.23),  
+            step_height_range=(0.05, 0.23),
             step_width=0.30,
             platform_width=3.0,
-            border_width=0.0,  
+            border_width=0.0,
         ),
+        # 离散障碍物：地面随机散布柱状/块状障碍物（占比 10%）
         "discrete_obstacles": him_terrains.HfDiscreteObstaclesTerrainCfg(
             proportion=0.1,
-            max_height_range=(0.05, 0.15),  # 0.05 + 0.1 * difficulty
-            obstacle_size_range=(1.0, 2.0),  # min=1m, max=2m
-            num_obstacles=20,
+            max_height_range=(0.05, 0.15),   # 障碍物高度范围 [m]，实际高度 = 0.05 + 0.1 * difficulty
+            obstacle_size_range=(1.0, 2.0),  # 障碍物底边尺寸范围 [m]
+            num_obstacles=20,                # 每块地形上障碍物的数量
             platform_width=3.0,
         ),
     },
@@ -276,20 +287,39 @@ class ObservationsCfg:
     # observation groups
     policy: PolicyCfg = PolicyCfg()
 
+    # Critic 观测组 —— 继承 PolicyCfg 的全部 6 项 + 额外 3 项特权信息
+    # Critic 在训练时拥有比 Actor 更多的信息（特权观测，即 privileged observations），
+    # 从而学到更准确的价值估计，而 Actor 部署时无需这些特权信息，形成非对称训练。
+    # Critic 观测 = Policy 观测（6 项） + 以下 3 项特权观测，构成 num_critic_obs 维输入
     @configclass
     class CriticCfg(PolicyCfg):
         """Observations for critic group."""
-        base_lin_vel = ObsTerm(func=mdp.base_lin_vel, scale=2.0, clip=(-100, 100), noise=Unoise(n_min=-0.1, n_max=0.1))
+
+        # 特权项 1: 机身线速度 base_lin_vel —— 3 维 (vx, vy, vz)
+        # Actor 没有这个信息（只能从历史观测中间接推断），Critic 用于精确评估速度跟踪表现
+        base_lin_vel = ObsTerm(
+            func=mdp.base_lin_vel,
+            scale=2.0,  # 缩放到 [-2, 2] 范围
+            clip=(-100, 100),
+            noise=Unoise(n_min=-0.1, n_max=0.1),  # 加噪增强鲁棒性
+        )
+        # 特权项 2: 机身受到的外力 base_external_force —— 3 维 (fx, fy, fz)
+        # 来自 mdp.base_external_force，读取 base 躯干上通过 permanent_wrench_composer 组合的累计外力
+        # 让 Critic 知道机器人当前受到的外部扰动，更准确评估状态价值
         base_external_force = ObsTerm(
             func=mdp.base_external_force,
             params={"asset_cfg": SceneEntityCfg("robot", body_names="base")},
             clip=(-100, 100),
         )
-        height_scanner = ObsTerm(func=mdp.height_scan_clip,
-            scale=5.0,
+        # 特权项 3: 地形高度扫描 height_scanner —— 160 维 (16×10 网格)
+        # 来自 mdp.height_scan_clip，对 height_scanner 传感器的射线命中点做 clip(-1, 1)，减去 offset 0.5
+        # 让 Critic 获得机器人周围 1.6m×1.0m 区域的地形高度信息
+        height_scanner = ObsTerm(
+            func=mdp.height_scan_clip,
+            scale=5.0,  # 放大数值差异
             params={"sensor_cfg": SceneEntityCfg("height_scanner")},
             clip=(-100, 100),
-            noise=Unoise(n_min=-0.1, n_max=0.1)
+            noise=Unoise(n_min=-0.1, n_max=0.1),
         )
 
         def __post_init__(self):
@@ -337,12 +367,15 @@ class RewardsCfg:
         },
     )
 
+    # 摆动足高度惩罚：将足部位置旋转变换到机身坐标系，惩罚足部 Z 偏离 target_height，
+    # 惩罚量 = 高度偏差² × 足部水平速率，仅摆动相生效（支撑相速率≈0，惩罚≈0）。
+    # target_height=-0.2 表示期望足部在机身下方 0.2m 处抬腿，避免拖地或抬得过高。
     feet_height_body = RewTerm(
         func=mdp.feet_height_body,
-        weight=-0.01,
+        weight=-0.01,       # 负权重，惩罚摆动足高度不当
         params={
-            "asset_cfg": SceneEntityCfg("robot", body_names=".*_foot"),
-            "target_height": -0.2,
+            "asset_cfg": SceneEntityCfg("robot", body_names=".*_foot"),  # 四足的所有 foot 刚体
+            "target_height": -0.2,   # 机身坐标系下的目标足部 Z 坐标（机身下方 0.2m）
             "command_name": "base_velocity",
         }
     )

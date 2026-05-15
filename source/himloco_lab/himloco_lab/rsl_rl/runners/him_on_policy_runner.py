@@ -143,6 +143,7 @@ class HIMOnPolicyRunner:
         ep_infos = []
         rewbuffer = deque(maxlen=100)
         lenbuffer = deque(maxlen=100)
+        best_mean_episode_length = float('-inf')  # 跟踪迄今最好的 mean episode length
         cur_reward_sum = torch.zeros(self.env.num_envs, dtype=torch.float, device=self.device)
         cur_episode_length = torch.zeros(self.env.num_envs, dtype=torch.float, device=self.device)
 
@@ -200,15 +201,21 @@ class HIMOnPolicyRunner:
             # log info
             if self.log_dir is not None:
                 self.log(locals())
-                # Save model
-                if it % self.save_interval == 0:
-                    self.save(os.path.join(self.log_dir, 'model_{}.pt'.format(it)))
+                # 当 lenbuffer 中有数据时，若当前 mean episode length 为迄今最优，则覆盖保存 greater_episode.pt
+                if len(lenbuffer) > 0:
+                    current_mean_episode_length = statistics.mean(lenbuffer)
+                    if current_mean_episode_length > best_mean_episode_length:
+                        best_mean_episode_length = current_mean_episode_length
+                        self.save(os.path.join(self.log_dir, 'greater_episode.pt'))
+                # 原来的按 save_interval 周期性保存，已注释
+                # if it % self.save_interval == 0:
+                #     self.save(os.path.join(self.log_dir, 'model_{}.pt'.format(it)))
             # Clear episode infos
             ep_infos.clear()
-        
-        # Save the final model after training
-        if self.log_dir is not None:
-            self.save(os.path.join(self.log_dir, 'model_{}.pt'.format(self.current_learning_iteration)))
+
+        # 原来的训练结束时最终保存，已注释
+        # if self.log_dir is not None:
+        #     self.save(os.path.join(self.log_dir, 'model_{}.pt'.format(self.current_learning_iteration)))
 
     def log(self, locs, width=80, pad=35):
         """Log training information to console and TensorBoard.

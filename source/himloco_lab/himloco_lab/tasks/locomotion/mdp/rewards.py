@@ -101,24 +101,39 @@ def feet_height_body(
     target_height: float,
     command_name: str|None = None,
 ) -> torch.Tensor:
-    """Reward the swinging feet for clearing a specified height off the ground"""
+    """惩罚摆动足离目标高度的偏差，仅当足部有水平速度时生效。
+
+    将足部位置和速度从世界坐标系旋转变换到机身坐标系（Z 轴垂直于机身），
+    计算足部 Z 坐标与 target_height 的平方误差 × 足部水平速率。
+    - 支撑相（足部静止）：速率≈0，惩罚≈0，不管高度对不对
+    - 摆动相（足部运动）：速率越大、高度偏差越大，惩罚越重
+    - 有 command_name 时，仅在速度指令 > 0.1 时才生效（静止时不要求足部高度）
+    """
     asset: RigidObject = env.scene[asset_cfg.name]
+    # 足部相对机身的世界坐标平移（仅平移，未旋转）
     cur_footpos_translated = asset.data.body_pos_w[:, asset_cfg.body_ids, :] - asset.data.root_pos_w[:, :].unsqueeze(1)
     footpos_in_body_frame = torch.zeros(env.num_envs, len(asset_cfg.body_ids), 3, device=env.device)
+    # 足部相对机身的世界速度（机身速度已扣除）
     cur_footvel_translated = asset.data.body_lin_vel_w[:, asset_cfg.body_ids, :] - asset.data.root_lin_vel_w[
         :, :
     ].unsqueeze(1)
     footvel_in_body_frame = torch.zeros(env.num_envs, len(asset_cfg.body_ids), 3, device=env.device)
     for i in range(len(asset_cfg.body_ids)):
+        # 用机身四元数的逆，将世界坐标系下的足部位置旋转到机身坐标系（机身 Z=上）
         footpos_in_body_frame[:, i, :] = math_utils.quat_apply_inverse(
             asset.data.root_quat_w, cur_footpos_translated[:, i, :]
         )
+        # 同样旋转速度到机身坐标系
         footvel_in_body_frame[:, i, :] = math_utils.quat_apply_inverse(
             asset.data.root_quat_w, cur_footvel_translated[:, i, :]
         )
+    # 足部 Z 偏离目标高度的平方误差（机身坐标系下，target_height=-0.2 表示足部在机身下方 0.2m）
     foot_z_target_error = torch.square(footpos_in_body_frame[:, :, 2] - target_height).view(env.num_envs, -1)
+    # 足部水平速率（机身 XY 平面内的速度幅值）
     foot_leteral_vel = torch.sqrt(torch.sum(torch.square(footvel_in_body_frame[:, :, :2]), dim=2)).view(env.num_envs, -1)
+    # 乘积：高度偏差 × 水平速率，仅摆动相有惩罚
     reward = torch.sum(foot_z_target_error * foot_leteral_vel, dim=1)
+    # 当速度指令接近零时不惩罚（机器人静止站立时不需要抬腿）
     if command_name is not None:
         reward *= torch.linalg.norm(env.command_manager.get_command(command_name), dim=1) > 0.1
     return reward
@@ -178,29 +193,29 @@ def base_height(
     asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
     sensor_cfg: SceneEntityCfg | None = None,
 ) -> torch.Tensor:
-    """Penalize asset height from its target using L2 squared kernel.
+    """惩罚机身偏离自适应目标高度的 L2 平方项。
 
-    Note:
-        For flat terrain, target height is in the world frame. For rough terrain,
-        sensor readings can adjust the target height to account for the terrain.
+    当传入 sensor_cfg 时，用射线命中点的世界 Z 坐标均值估算脚下地形高程，
+    自动调整目标高度为 target_height + 地形平均高程，使机器人在崎岖地形上
+    仍能保持相对地面约 target_height 的高度。
+    若 sensor_cfg 为 None，直接用 world 坐标系下的固定 target_height。
+    惩罚会乘以倾斜衰减因子，机器人严重倾斜或摔倒时自动减轻惩罚。
     """
     # extract the used quantities (to enable type-hinting)
     asset: RigidObject = env.scene[asset_cfg.name]
     if sensor_cfg is not None:
         sensor: RayCaster = env.scene[sensor_cfg.name]
-        # Adjust the target height using the sensor data
+        # 射线命中点的世界 Z 坐标（绝对高程），shape: (num_envs, num_rays)
         ray_hits = sensor.data.ray_hits_w[..., 2]
         
-        # Replace invalid values (NaN, Inf, too large) with NaN for masked mean
+        # 过滤无效值（NaN、Inf、绝对值过大），替换为 NaN 供后续 nanmean 自动忽略
         valid_mask = ~torch.isnan(ray_hits) & ~torch.isinf(ray_hits) & (torch.abs(ray_hits) < 1e6)
         ray_hits_masked = torch.where(valid_mask, ray_hits, torch.tensor(float('nan'), device=ray_hits.device))
         
-        # Compute mean ignoring NaN (i.e., ignoring invalid points)
-        # nanmean computes mean per environment, automatically ignoring NaN values
+        # 每个环境下有效射线 Z 坐标的均值 → 脚下地形的平均高程
         adjusted_heights = torch.nanmean(ray_hits_masked, dim=1)
-        
-        # For environments where ALL points are invalid, nanmean returns NaN
-        # Replace these with current robot height
+
+        # 若某环境所有射线都无效，退回用机身当前高度作为参考
         all_invalid_mask = torch.isnan(adjusted_heights)
         if all_invalid_mask.any():
             invalid_env_count = all_invalid_mask.sum().item()
@@ -208,12 +223,14 @@ def base_height(
             print(f"[WARNING] base_height - {invalid_env_count} envs with all invalid points, total invalid: {total_invalid_points}/{ray_hits.numel()} ({total_invalid_points/ray_hits.numel():.2%})")
             adjusted_heights[all_invalid_mask] = asset.data.root_link_pos_w[all_invalid_mask, 2] - target_height
         
+        # 自适应目标 = 期望离地高度 + 脚下地形高程（台阶上目标抬高，坑里目标降低）
         adjusted_target_height = target_height + adjusted_heights
     else:
-        # Use the provided target height directly for flat terrain
+        # 无传感器时直接用世界坐标系下的固定高度
         adjusted_target_height = target_height
-    # Compute the L2 squared penalty
+    # L2 平方惩罚：(机身世界 Z - 自适应目标)^2
     reward = torch.square(asset.data.root_pos_w[:, 2] - adjusted_target_height)
+    # 倾斜衰减：projected_gravity_b[:,2] 直立=-1, 翻倒=0，clamp(-gz,0,0.7)/0.7 → 直立满罚，翻倒免罚
     reward *= torch.clamp(-env.scene["robot"].data.projected_gravity_b[:, 2], 0, 0.7) / 0.7
     return reward
 
