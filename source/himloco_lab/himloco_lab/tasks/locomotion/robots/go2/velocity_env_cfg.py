@@ -480,10 +480,12 @@ class TerminationsCfg:
     """Termination terms for the MDP."""
 
     time_out = DoneTerm(func=mdp.time_out, time_out=True)
+    # 机身接触终止：底座与其他物体接触力超过 1.0N 时触发，通常意味着摔倒或碰撞
     base_contact = DoneTerm(
         func=mdp.illegal_contact,
         params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names="base"), "threshold": 1.0},
     )
+    # 越界终止：机器人距地形边缘不足 3.0m 时触发，time_out=True 表示不施加额外惩罚
     terrain_out_of_bounds = DoneTerm(
         func=mdp.terrain_out_of_bounds,
         params={"asset_cfg": SceneEntityCfg("robot"), "distance_buffer": 3.0},
@@ -493,9 +495,22 @@ class TerminationsCfg:
 
 @configclass
 class CurriculumCfg:
-    """Curriculum terms for the MDP."""
+    """Configuration for curriculum learning terms.
 
+    Curriculum terms adjust environment difficulty during training based on agent performance,
+    enabling automatic progression from easy to hard tasks.
+    """
+
+    # 地形难度课程：每 episode 结束时根据机器人实际行走距离调整地形等级
+    # 升级条件：行走距离 > 地形块尺寸的一半（4m，即水平方向跨越过半）
+    # 降级条件：行走距离 < 指令速度要求距离的 50%（没跟上指令）
+    # 地形等级对应 COBBLESTONE_ROAD_CFG 的 num_rows=10，等级 0 最平坦，9 最崎岖
     terrain_levels = CurrTerm(func=mdp.terrain_levels_vel)
+
+    # 线速度指令课程：当两组环境的 track_lin_vel_xy 奖励均超过 max_reward*0.8 时，
+    # 将 lin_vel_x 指令范围扩大 ±0.2，受 curriculums_limit_ranges=(-2, 2) 限制
+    # 环境分为高速度组（前 80%，ID 0-3276）和低速度组（后 20%，ID 3277-4095），
+    # 两组都达标才升级，防止低速度环境拖后腿导致政策偏向低速
     lin_vel_cmd_levels = CurrTerm(mdp.lin_vel_cmd_levels)
 
 

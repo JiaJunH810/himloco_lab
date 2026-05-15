@@ -21,7 +21,7 @@ parser.add_argument("--num_envs", type=int, default=None, help="Number of enviro
 parser.add_argument("--task", type=str, default=None, help="Name of the task.")
 parser.add_argument(
     "--agent", type=str, default="himloco_rsl_rl_cfg", help="Name of the RL agent configuration entry point."
-)
+)   # 默认agent使用"himloco_rsl_rl_cfg"
 parser.add_argument("--seed", type=int, default=None, help="Seed used for the environment")
 parser.add_argument("--max_iterations", type=int, default=None, help="RL Policy training iterations.")
 parser.add_argument(
@@ -65,7 +65,7 @@ torch.backends.cudnn.deterministic = False
 torch.backends.cudnn.benchmark = False
 
 
-@hydra_task_config(args_cli.task, args_cli.agent)
+@hydra_task_config(args_cli.task, args_cli.agent)   # 根据task找到对应的任务框架(包含环境和环境配置), 根据agent找到对应的强化学习配置
 def main(env_cfg: ManagerBasedRLEnvCfg, agent_cfg: HIMOnPolicyRunnerCfg):
     """Train with HimLoco RSL-RL agent."""
     # override configurations with non-hydra CLI arguments
