@@ -382,7 +382,7 @@ class RewardsCfg:
         weight=-0.01,
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names=".*_ankle_roll_link"),
-            "target_height": -0.76,
+            "target_height": -0.6,   # 体坐标系下 -0.6m = 脚离地约 0.16m，鼓励抬脚步行
             "command_name": "base_velocity",
         }
     )
