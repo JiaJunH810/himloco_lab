@@ -162,7 +162,7 @@ DAMPING_7520_14 = 2.0 * DAMPING_RATIO * ARMATURE_7520_14 * NATURAL_FREQ
 DAMPING_7520_22 = 2.0 * DAMPING_RATIO * ARMATURE_7520_22 * NATURAL_FREQ
 DAMPING_4010 = 2.0 * DAMPING_RATIO * ARMATURE_4010 * NATURAL_FREQ
 
-UNITREE_G1_29DOF_CFG = ArticulationCfg(
+UNITREE_G1_29DOF_CFG = UnitreeArticulationCfg(
     spawn=sim_utils.UrdfFileCfg(
         fix_base=False,
         replace_cylinders_with_capsules=True,
@@ -193,6 +193,20 @@ UNITREE_G1_29DOF_CFG = ArticulationCfg(
         },
         joint_vel={".*": 0.0},
     ),
+    joint_sdk_names=[
+        "left_hip_pitch_joint",   # G1 DDS index 0
+        "left_hip_roll_joint",    # G1 DDS index 1
+        "left_hip_yaw_joint",     # G1 DDS index 2
+        "left_knee_joint",        # G1 DDS index 3
+        "left_ankle_pitch_joint", # G1 DDS index 4
+        "left_ankle_roll_joint",  # G1 DDS index 5
+        "right_hip_pitch_joint",  # G1 DDS index 6
+        "right_hip_roll_joint",   # G1 DDS index 7
+        "right_hip_yaw_joint",    # G1 DDS index 8
+        "right_knee_joint",       # G1 DDS index 9
+        "right_ankle_pitch_joint",# G1 DDS index 10
+        "right_ankle_roll_joint", # G1 DDS index 11
+    ],
     soft_joint_pos_limit_factor=0.9,
     actuators={
         "legs": ImplicitActuatorCfg(
