@@ -6,4 +6,5 @@
 """Utility functions for HimLoco Lab."""
 
 from .export_deploy_cfg import export_deploy_cfg
+from .export_onnx_metadata import attach_onnx_metadata
 from .export_policy import export_himloco_policy_as_jit, export_himloco_policy_as_onnx

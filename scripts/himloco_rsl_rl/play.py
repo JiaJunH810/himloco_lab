@@ -64,7 +64,11 @@ from isaaclab.utils.dict import print_dict
 import himloco_lab.tasks  # noqa: F401
 from himloco_lab.rsl_rl import HIMOnPolicyRunner, HimlocoVecEnvWrapper
 from himloco_lab.rsl_rl.config import HIMOnPolicyRunnerCfg
-from himloco_lab.utils import export_himloco_policy_as_jit, export_himloco_policy_as_onnx
+from himloco_lab.utils import (
+    attach_onnx_metadata,
+    export_himloco_policy_as_jit,
+    export_himloco_policy_as_onnx,
+)
 from isaaclab_tasks.utils import get_checkpoint_path
 from isaaclab_tasks.utils.hydra import hydra_task_config
 
@@ -168,6 +172,14 @@ def main(env_cfg: ManagerBasedRLEnvCfg, agent_cfg: HIMOnPolicyRunnerCfg):
         encoder_filename="encoder.onnx",
         policy_filename="policy.onnx",
         verbose=False
+    )
+
+    # 将环境配置参数（关节名、刚度/阻尼、动作缩放等）写入 ONNX 元数据
+    # 部署时可直接从 ONNX 读取，无需重新配置环境
+    attach_onnx_metadata(
+        env.unwrapped,
+        export_model_dir,
+        policy_filename="policy.onnx",
     )
 
     dt = env.unwrapped.step_dt

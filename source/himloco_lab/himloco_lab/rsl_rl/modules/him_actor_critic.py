@@ -164,7 +164,7 @@ class HIMActorCritic(nn.Module):
 
     def update_distribution(self, obs_history):
         with torch.no_grad():
-            vel, latent = self.estimator(obs_history)
+            vel, latent = self.estimator(obs_history)   # 通过历史状态算出当前真实速度(vel)和运动状态(latent)
         actor_input = torch.cat((obs_history[:,:self.num_one_step_obs], vel, latent), dim=-1)
 
         # Check for NaN/Inf in inputs

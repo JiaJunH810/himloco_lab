@@ -149,83 +149,88 @@ class RobotSceneCfg(InteractiveSceneCfg):
 class EventCfg:
     """Configuration for events."""
 
-    # startup
+    # ==================== startup 域随机化 —— 仅在环境初始化时执行一次 ====================
+
+    # 随机化机器人所有身体部件的物理材质（摩擦系数），让策略适应不同地面摩擦力
     physics_material = EventTerm(
         func=mdp.randomize_rigid_body_material,
         mode="startup",
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names=".*"),
-            "static_friction_range": (0.2, 1.25),
-            "dynamic_friction_range": (0.2, 1.25),
-            "restitution_range": (0.0, 0.0),
-            "num_buckets": 64,
+            "static_friction_range": (0.2, 1.25),    # 静摩擦系数范围
+            "dynamic_friction_range": (0.2, 1.25),   # 动摩擦系数范围
+            "restitution_range": (0.0, 0.0),         # 恢复系数固定为 0（完全非弹性碰撞）
+            "num_buckets": 64,                        # 分桶数，防止值过于离散
         },
     )
 
+    # 随机增减机身 base 的质量，模拟不同负载（如背上装了不同重量的设备）
     add_base_mass = EventTerm(
         func=mdp.randomize_rigid_body_mass,
         mode="startup",
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names="base"),
-            "mass_distribution_params": (-1.0, 2.0),
-            "operation": "add",
+            "mass_distribution_params": (-1.0, 2.0),  # 额外增加的质量范围 [kg]，负数为减重
+            "operation": "add",                        # "add" = 在原有质量上加减
         },
     )
-    
+
+    # 随机偏移 base 躯干的质心，模拟传感器/电池等硬件安装不对称
     randomize_rigid_body_com = EventTerm(
         func=mdp.randomize_rigid_body_com,
         mode="startup",
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names="base"),
-            "com_range": {"x": (-0.05, 0.05), "y": (-0.05, 0.05), "z": (-0.05, 0.05)},
+            "com_range": {"x": (-0.05, 0.05), "y": (-0.05, 0.05), "z": (-0.05, 0.05)},  # 各方向偏移 ±5cm
         },
     )
 
-    # reset
+    # ==================== reset 随机化 —— 每次 episode 重置时执行 ====================
 
+    # 随机偏移机器人初始位置，朝向固定 (yaw=0)，初始速度全部为零
     reset_base = EventTerm(
         func=mdp.reset_root_state_uniform,
         mode="reset",
         params={
-            "pose_range": {"x": (-0.5, 0.5), "y": (-0.5, 0.5), "yaw": (0.0, 0.0)},
+            "pose_range": {"x": (-0.5, 0.5), "y": (-0.5, 0.5), "yaw": (0.0, 0.0)},  # 位置 ±0.5m，朝向不变
             "velocity_range": {
-                "x": (0.0, 0.0),
-                "y": (0.0, 0.0),
-                "z": (0.0, 0.0),
-                "roll": (0.0, 0.0),
-                "pitch": (0.0, 0.0),
-                "yaw": (0.0, 0.0),
+                "x": (0.0, 0.0), "y": (0.0, 0.0), "z": (0.0, 0.0),
+                "roll": (0.0, 0.0), "pitch": (0.0, 0.0), "yaw": (0.0, 0.0),
             },
         },
     )
 
+    # 随机缩放关节初始角度，让每次起身的初始姿态不同
     reset_robot_joints = EventTerm(
         func=mdp.reset_joints_by_scale,
         mode="reset",
         params={
-            "position_range": (0.5, 1.5),
-            "velocity_range": (0, 0),
+            "position_range": (0.5, 1.5),   # 关节角度在默认值的 0.5~1.5 倍之间随机
+            "velocity_range": (0, 0),        # 初始关节速度为零
         },
     )
 
-    # interval
+    # ==================== interval 扰动 —— 按固定时间间隔持续触发 ====================
+
+    # 周期性施加正弦外力到 base 躯干，模拟持续外部扰动（风、推搡等），是域随机化最重的手段
     external_force = EventTerm(
         func=mdp.apply_periodic_external_force_torque,
         mode="interval",
-        interval_range_s=(0.02, 0.02),
+        interval_range_s=(0.02, 0.02),            # 每 0.02 秒触发一次（即每步都生效）
         params={
-            "period_step": 8,
-            "force_range": (-30.0, 30.0),
-            "torque_range": (-0.0, 0.0),
+            "period_step": 8,                       # 正弦周期 = 8 步
+            "force_range": (-30.0, 30.0),          # 力范围 ±30N
+            "torque_range": (-0.0, 0.0),           # 力矩为 0
             "asset_cfg": SceneEntityCfg("robot", body_names="base"),
         },
     )
+    # 每隔 16 秒给 base 施加一个随机速度脉冲，模拟突然被撞，训练摔倒恢复能力
     push_robot = EventTerm(
         func=mdp.push_by_setting_velocity,
         mode="interval",
-        interval_range_s=(16.0, 16.0),
+        interval_range_s=(16.0, 16.0),             # 每 16 秒触发一次
         params={
-            "velocity_range": {"x": (-1, 1), "y": (-1, 1)},
+            "velocity_range": {"x": (-1, 1), "y": (-1, 1)},  # 随机速度脉冲 ±1 m/s
             "asset_cfg": SceneEntityCfg("robot", body_names="base"),
         },
     )
@@ -239,7 +244,7 @@ class CommandsCfg:
         asset_name="robot",
         resampling_time_range=(10.0, 10.0),
         debug_vis=True,
-        heading_command=True,
+        heading_command=False,
         ranges=mdp.UniformLevelVelocityCommandCfg.Ranges(
             lin_vel_x=(-1, 1), lin_vel_y=(-1.0, 1.0), ang_vel_z=(-2.0, 2.0), heading=(-math.pi, math.pi)
         ),
