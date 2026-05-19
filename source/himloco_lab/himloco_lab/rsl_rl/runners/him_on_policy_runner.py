@@ -144,6 +144,10 @@ class HIMOnPolicyRunner:
         rewbuffer = deque(maxlen=100)
         lenbuffer = deque(maxlen=100)
         best_mean_episode_length = float('-inf')  # 跟踪迄今最好的 mean episode length
+        best_combined_score = float('-inf')       # 跟踪迄今最好 Mean reward + mean terrain_levels
+        best_saved_at_iter = 0
+        best_saved_mean_reward = 0.0
+        best_saved_mean_terrain = 0.0
         cur_reward_sum = torch.zeros(self.env.num_envs, dtype=torch.float, device=self.device)
         cur_episode_length = torch.zeros(self.env.num_envs, dtype=torch.float, device=self.device)
 
@@ -201,15 +205,32 @@ class HIMOnPolicyRunner:
             # log info
             if self.log_dir is not None:
                 self.log(locals())
-                # 当 lenbuffer 中有数据时，若当前 mean episode length 为迄今最优，则覆盖保存 greater_episode.pt
-                if len(lenbuffer) > 0:
-                    current_mean_episode_length = statistics.mean(lenbuffer)
-                    if current_mean_episode_length > best_mean_episode_length:
-                        best_mean_episode_length = current_mean_episode_length
-                        self.save(os.path.join(self.log_dir, 'greater_episode.pt'))
+                # 当 rewbuffer 中有数据时，若当前 Mean reward + mean terrain_levels 为迄今最优，则保存 best_model.pt
+                if len(rewbuffer) > 0:
+                    mean_reward = statistics.mean(rewbuffer)
+                    mean_terrain = 0.0
+                    terrain_vals = []
+                    for ep_info in ep_infos:
+                        terrain_key = next((k for k in ep_info if "terrain_levels" in k), None)
+                        if terrain_key is not None:
+                            t = ep_info[terrain_key]
+                            if isinstance(t, torch.Tensor):
+                                terrain_vals.append(t.item() if t.numel() == 1 else t.mean().item())
+                            else:
+                                terrain_vals.append(float(t))
+                    if terrain_vals:
+                        mean_terrain = statistics.mean(terrain_vals)
+                    combined_score = mean_reward + mean_terrain
+                    if combined_score > best_combined_score:
+                        best_combined_score = combined_score
+                        best_saved_at_iter = it
+                        best_saved_mean_reward = mean_reward
+                        best_saved_mean_terrain = mean_terrain
+                        self.save(os.path.join(self.log_dir, 'best_model.pt'))
                 # 原来的按 save_interval 周期性保存，已注释
                 # if it % self.save_interval == 0:
                 #     self.save(os.path.join(self.log_dir, 'model_{}.pt'.format(it)))
+                print(f"[Best model] iter={best_saved_at_iter}  reward={best_saved_mean_reward:.2f}  terrain={best_saved_mean_terrain:.2f}  score={best_combined_score:.2f}")
             # Clear episode infos
             ep_infos.clear()
 
