@@ -119,15 +119,15 @@ class RobotSceneCfg(InteractiveSceneCfg):
 
     # sensors
     height_scanner = RayCasterCfg(
-        prim_path="{ENV_REGEX_NS}/Robot/base",
+        prim_path="{ENV_REGEX_NS}/Robot/pelvis",
         offset=RayCasterCfg.OffsetCfg(pos=(0.0, 0.0, 20.0)),
         ray_alignment="yaw",
         pattern_cfg=patterns.GridPatternCfg(resolution=0.1, size=[1.6, 1.0]),
         debug_vis=False,
-        mesh_prim_paths=["/World/ground"],  
+        mesh_prim_paths=["/World/ground"],
     )
     base_height_scanner = RayCasterCfg(
-        prim_path="{ENV_REGEX_NS}/Robot/base",
+        prim_path="{ENV_REGEX_NS}/Robot/pelvis",
         offset=RayCasterCfg.OffsetCfg(pos=(0.0, 0.0, 20.0)),
         ray_alignment="yaw",
         pattern_cfg=patterns.GridPatternCfg(resolution=0.05, size=[0.3, 0.4]),
@@ -169,7 +169,7 @@ class EventCfg:
         func=mdp.randomize_rigid_body_mass,
         mode="startup",
         params={
-            "asset_cfg": SceneEntityCfg("robot", body_names="base"),
+            "asset_cfg": SceneEntityCfg("robot", body_names="pelvis"),
             "mass_distribution_params": (-1.0, 2.0),  # 额外增加的质量范围 [kg]，负数为减重
             "operation": "add",                        # "add" = 在原有质量上加减
         },
@@ -180,7 +180,7 @@ class EventCfg:
         func=mdp.randomize_rigid_body_com,
         mode="startup",
         params={
-            "asset_cfg": SceneEntityCfg("robot", body_names="base"),
+            "asset_cfg": SceneEntityCfg("robot", body_names="pelvis"),
             "com_range": {"x": (-0.05, 0.05), "y": (-0.05, 0.05), "z": (-0.05, 0.05)},  # 各方向偏移 ±5cm
         },
     )
@@ -221,7 +221,7 @@ class EventCfg:
             "period_step": 8,                       # 正弦周期 = 8 步
             "force_range": (-30.0, 30.0),          # 力范围 ±30N
             "torque_range": (-0.0, 0.0),           # 力矩为 0
-            "asset_cfg": SceneEntityCfg("robot", body_names="base"),
+            "asset_cfg": SceneEntityCfg("robot", body_names="pelvis"),
         },
     )
     # 每隔 16 秒给 base 施加一个随机速度脉冲，模拟突然被撞，训练摔倒恢复能力
@@ -231,7 +231,7 @@ class EventCfg:
         interval_range_s=(16.0, 16.0),             # 每 16 秒触发一次
         params={
             "velocity_range": {"x": (-1, 1), "y": (-1, 1)},  # 随机速度脉冲 ±1 m/s
-            "asset_cfg": SceneEntityCfg("robot", body_names="base"),
+            "asset_cfg": SceneEntityCfg("robot", body_names="pelvis"),
         },
     )
 
@@ -317,7 +317,7 @@ class ObservationsCfg:
         # 让 Critic 知道机器人当前受到的外部扰动，更准确评估状态价值
         base_external_force = ObsTerm(
             func=mdp.base_external_force,
-            params={"asset_cfg": SceneEntityCfg("robot", body_names="base")},
+            params={"asset_cfg": SceneEntityCfg("robot", body_names="pelvis")},
             clip=(-100, 100),
         )
         # 特权项 3: 地形高度扫描 height_scanner —— 160 维 (16×10 网格)
@@ -490,7 +490,17 @@ class TerminationsCfg:
     # 机身接触终止：底座与其他物体接触力超过 1.0N 时触发，通常意味着摔倒或碰撞
     base_contact = DoneTerm(
         func=mdp.illegal_contact,
-        params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names="base"), "threshold": 1.0},
+        params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names="pelvis"), "threshold": 1.0},
+    )
+    # 机身高度终止：通过 base_height_scanner 雷达检测脚下地形高度，
+    # 当机器人 base 离脚下地面不足 0.3m 时判定为摔倒，终止该环境
+    base_too_low = DoneTerm(
+        func=mdp.base_too_low,
+        params={
+            "asset_cfg": SceneEntityCfg("robot"),
+            "sensor_cfg": SceneEntityCfg("base_height_scanner"),
+            "min_height": 0.3,
+        },
     )
     # 越界终止：机器人距地形边缘不足 3.0m 时触发，time_out=True 表示不施加额外惩罚
     terrain_out_of_bounds = DoneTerm(
