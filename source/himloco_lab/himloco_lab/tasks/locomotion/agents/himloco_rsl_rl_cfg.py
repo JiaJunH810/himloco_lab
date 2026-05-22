@@ -40,4 +40,9 @@ class PPORunnerCfg(HIMOnPolicyRunnerCfg):
 @configclass
 class G1PPORunnerCfg(PPORunnerCfg):
     experiment_name = "g1_rough"
+
+
+@configclass
+class CyborgPPORunnerCfg(PPORunnerCfg):
+    experiment_name = "cyborg_rough"
     

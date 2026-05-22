@@ -109,6 +109,7 @@ class HimLocoG1Sim2Sim:
 
         # ── Viewer ─────────────────────────────────────────────────────
         self.viewer = mujoco_viewer.MujocoViewer(self.m, self.d)
+        self.viewer._paused = None  # 禁用空格/右键暂停，避免方向键→与键盘控制冲突
         self.viewer.cam.distance = 2.5
         self.viewer.cam.azimuth = 135
         self.viewer.cam.elevation = -15
