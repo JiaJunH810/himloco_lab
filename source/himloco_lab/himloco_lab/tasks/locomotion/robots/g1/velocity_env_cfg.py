@@ -389,7 +389,7 @@ class RewardsCfg:
 
     action_rate = RewTerm(func=mdp.action_rate_l2, weight=-0.01)
     smoothness = RewTerm(func=mdp.smoothness, weight=-0.01)
-    terrain_level = RewTerm(func=mdp.terrain_level_bonus, weight=0.2)
+    terrain_level = RewTerm(func=mdp.terrain_level_bonus, weight=0.02)
     # joint_torques = RewTerm(func=mdp.joint_torques_l2, weight=-2e-4)
     # joint_vel = RewTerm(func=mdp.joint_vel_l2, weight=-0.001)
     

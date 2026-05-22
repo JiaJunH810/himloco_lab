@@ -96,14 +96,14 @@ def terrain_levels_vel(
     env: ManagerBasedRLEnv,
     env_ids: Sequence[int],
     asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
-    upgrade_tile_ratio: float = 0.33,
+    upgrade_tile_ratio: float = 0.5,
     grace_period_resets: int = 15,
 ) -> torch.Tensor:
-    """地形等级课程：带升级保护期 + 降低升级门槛。
+    """地形等级课程：带升级保护期。
 
-    相比 Isaac Lab 原版的两处改进（针对双足机器人）：
-    1. 升级门槛从地块尺寸/2 降为尺寸/3（~4m → ~2.67m），更容易升级
-    2. 升级后 15 个 episode 内禁止降级，打破升-跌-降的死亡循环
+    相比 Isaac Lab 原版的改进：
+    1. 升级后 15 个 episode 内禁止降级，打破升-跌-降的死亡循环
+    2. 有保护期兜底后，升级门槛保持原地块尺寸/2（4m），需要策略真正走起来
     """
     asset: Articulation = env.scene[asset_cfg.name]
     terrain: TerrainImporter = env.scene.terrain
@@ -114,7 +114,7 @@ def terrain_levels_vel(
         asset.data.root_pos_w[env_ids, :2] - env.scene.env_origins[env_ids, :2], dim=1
     )
 
-    # 升级条件：走了超过 upgrade_tile_ratio 倍的地块宽度（默认 0.33 * 8m = 2.67m）
+    # 升级条件：走了超过 upgrade_tile_ratio 倍的地块宽度（0.5 * 8m = 4m）
     tile_size = terrain.cfg.terrain_generator.size[0]
     move_up = distance > tile_size * upgrade_tile_ratio
 
