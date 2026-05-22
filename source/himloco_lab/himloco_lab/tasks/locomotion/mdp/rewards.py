@@ -392,3 +392,12 @@ def joint_mirror(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg, mirror_joint
         )
     reward *= 1 / len(mirror_joints) if len(mirror_joints) > 0 else 0
     return reward
+
+
+def terrain_level_bonus(env: ManagerBasedRLEnv) -> torch.Tensor:
+    """地形等级奖励：给当前所处地形等级的常数奖励。
+
+    目的：给策略直接激励去追求更高级别地形，打破"停在简单地形赚速度奖励"的局部最优。
+    权重小（~0.2），不会压过主奖励，但足以在 PPO 目标中产生可感知的梯度。
+    """
+    return env.scene.terrain.terrain_levels.float()

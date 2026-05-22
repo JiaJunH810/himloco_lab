@@ -29,7 +29,7 @@ COBBLESTONE_ROAD_CFG = terrain_gen.TerrainGeneratorCfg(
     # === 地形网格基础参数 ===
     size=(8.0, 8.0),          # 每个地形块的尺寸 [m]（宽 x 长）
     border_width=25.0,        # 地形外围平坦边界的宽度 [m]，边界内坡度为0
-    num_rows=10,              # 难度等级行数，从上到下难度递增（10个级别）
+    num_rows=20,              # 难度等级行数，从上到下难度递增（20个级别，比四足更细）
     num_cols=20,              # 地形类型列数，每行随机生成20种不同类型的地形块
     horizontal_scale=0.1,     # 高度场网格分辨率 [m]，越小越精细
     vertical_scale=0.005,     # 高度缩放系数 [m]，乘到高度场上控制整体起伏幅度
@@ -99,7 +99,7 @@ class RobotSceneCfg(InteractiveSceneCfg):
         prim_path="/World/ground",
         terrain_type="generator",  # "plane", "generator"
         terrain_generator=COBBLESTONE_ROAD_CFG,  # None, COBBLESTONE_ROAD_CFG
-        max_init_terrain_level=5,
+        max_init_terrain_level=2,   # 双足从低难度起步，避免初始化就全摔
         collision_group=-1,
         physics_material=sim_utils.RigidBodyMaterialCfg(
             friction_combine_mode="multiply",
@@ -362,8 +362,8 @@ class RewardsCfg:
 
     # -- base
     base_linear_velocity = RewTerm(func=mdp.lin_vel_z_l2, weight=-2.0)
-    base_angular_velocity = RewTerm(func=mdp.ang_vel_xy_l2, weight=-0.05)
-    flat_orientation_l2 = RewTerm(func=mdp.flat_orientation_l2, weight=-0.2)
+    base_angular_velocity = RewTerm(func=mdp.ang_vel_xy_l2, weight=-0.15)
+    flat_orientation_l2 = RewTerm(func=mdp.flat_orientation_l2, weight=-0.5)
     joint_acc = RewTerm(func=mdp.joint_acc_l2, weight=-2.5e-7)
     energy = RewTerm(func=mdp.energy, weight=-2e-5)
     
@@ -379,7 +379,7 @@ class RewardsCfg:
     # G1 bipedal feet height: use ankle_roll_link as foot bodies
     feet_height_body = RewTerm(
         func=mdp.feet_height_body,
-        weight=-0.01,
+        weight=-0.05,
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names=".*_ankle_roll_link"),
             "target_height": -0.6,   # 体坐标系下 -0.6m = 脚离地约 0.16m，鼓励抬脚步行
@@ -389,6 +389,7 @@ class RewardsCfg:
 
     action_rate = RewTerm(func=mdp.action_rate_l2, weight=-0.01)
     smoothness = RewTerm(func=mdp.smoothness, weight=-0.01)
+    terrain_level = RewTerm(func=mdp.terrain_level_bonus, weight=0.2)
     # joint_torques = RewTerm(func=mdp.joint_torques_l2, weight=-2e-4)
     # joint_vel = RewTerm(func=mdp.joint_vel_l2, weight=-0.001)
     
@@ -401,29 +402,29 @@ class RewardsCfg:
     #     },
     # )
     
-    # other_undesired_contacts = RewTerm(
-    #     func=mdp.undesired_contacts,
-    #     weight=-0.01,
-    #     params={
-    #         "threshold": 0.3,
-    #         "sensor_cfg": SceneEntityCfg("contact_forces", body_names=[".*_hip", ".*_thigh", ".*_calf"]),
-    #     },
-    # )
+    other_undesired_contacts = RewTerm(
+        func=mdp.undesired_contacts,
+        weight=-0.5,
+        params={
+            "threshold": 0.3,
+            "sensor_cfg": SceneEntityCfg("contact_forces", body_names=[".*_hip", ".*_thigh", ".*_knee"]),
+        },
+    )
 
-    # is_terminated = RewTerm(func=mdp.is_terminated, weight=-5.0)
+    is_terminated = RewTerm(func=mdp.is_terminated, weight=-5.0)
     # joint_pos_limits = RewTerm(func=mdp.joint_pos_limits, weight=-5.0)
     # joint_vel_limits = RewTerm(func=mdp.joint_vel_limits, weight=-5.0)
     # applied_torque_limits = RewTerm(func=mdp.applied_torque_limits, weight=-5.0)
     
-    # feet_air_time = RewTerm(
-    #     func=mdp.feet_air_time,
-    #     weight=0.1,
-    #     params={
-    #         "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_foot"),
-    #         "command_name": "base_velocity",
-    #         "threshold": 0.5,
-    #     },
-    # )
+    feet_air_time = RewTerm(
+        func=mdp.feet_air_time,
+        weight=0.1,
+        params={
+            "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_ankle_roll_link"),
+            "command_name": "base_velocity",
+            "threshold": 0.5,
+        },
+    )
     
     # feet_stumble = RewTerm(
     #     func=mdp.feet_stumble,
@@ -602,3 +603,8 @@ class RobotPlayEnvCfg(RobotEnvCfg):
         self.events.add_base_mass = None
         self.events.randomize_rigid_body_com = None
         self.events.push_robot = None
+
+        # 视角跟踪第一个环境的机器人
+        self.viewer.origin_type = "asset_root"
+        self.viewer.asset_name = "robot"
+        self.viewer.env_index = 0

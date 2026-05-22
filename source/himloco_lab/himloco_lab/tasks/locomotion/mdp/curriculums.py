@@ -4,6 +4,10 @@ import torch
 from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
+from isaaclab.assets.articulation import Articulation
+from isaaclab.managers import SceneEntityCfg
+from isaaclab.terrains import TerrainImporter
+
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
 
@@ -86,3 +90,58 @@ def lin_vel_cmd_levels(
     # 返回值 shape: 标量 tensor，内容为 lin_vel_x 的最大值
     # CommandManager 内部用此值对采样的指令做缩放
     return torch.tensor(ranges.lin_vel_x[1], device=env.device)
+
+
+def terrain_levels_vel(
+    env: ManagerBasedRLEnv,
+    env_ids: Sequence[int],
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+    upgrade_tile_ratio: float = 0.33,
+    grace_period_resets: int = 15,
+) -> torch.Tensor:
+    """地形等级课程：带升级保护期 + 降低升级门槛。
+
+    相比 Isaac Lab 原版的两处改进（针对双足机器人）：
+    1. 升级门槛从地块尺寸/2 降为尺寸/3（~4m → ~2.67m），更容易升级
+    2. 升级后 15 个 episode 内禁止降级，打破升-跌-降的死亡循环
+    """
+    asset: Articulation = env.scene[asset_cfg.name]
+    terrain: TerrainImporter = env.scene.terrain
+    command = env.command_manager.get_command("base_velocity")
+
+    # 计算从出生点到当前位置的欧氏距离
+    distance = torch.norm(
+        asset.data.root_pos_w[env_ids, :2] - env.scene.env_origins[env_ids, :2], dim=1
+    )
+
+    # 升级条件：走了超过 upgrade_tile_ratio 倍的地块宽度（默认 0.33 * 8m = 2.67m）
+    tile_size = terrain.cfg.terrain_generator.size[0]
+    move_up = distance > tile_size * upgrade_tile_ratio
+
+    # 降级条件：走的距离 < 指令速度 * 最大 episode 时长 * 0.5
+    # 即如果完全跟不上指令速度，就降级
+    move_down = distance < torch.norm(command[env_ids, :2], dim=1) * env.max_episode_length_s * 0.5
+    move_down *= ~move_up  # 升级优先
+
+    # --- 保护期机制 ---
+    if not hasattr(env, "_curriculum_grace_counter"):
+        env._curriculum_grace_counter = torch.zeros(
+            env.num_envs, dtype=torch.long, device=env.device
+        )
+
+    # 刚升级的环境获得保护期
+    upgraded_ids = env_ids[move_up]
+    if len(upgraded_ids) > 0:
+        env._curriculum_grace_counter[upgraded_ids] = grace_period_resets
+
+    # 所有被评估的环境保护期减 1
+    env._curriculum_grace_counter[env_ids] = torch.clamp(
+        env._curriculum_grace_counter[env_ids] - 1, min=0
+    )
+
+    # 保护期内禁止降级
+    in_grace = env._curriculum_grace_counter[env_ids] > 0
+    move_down[in_grace] = False
+
+    terrain.update_env_origins(env_ids, move_up, move_down)
+    return torch.mean(terrain.terrain_levels.float())

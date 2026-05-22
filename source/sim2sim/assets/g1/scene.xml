@@ -1,0 +1,23 @@
+<mujoco model="g1 scene">
+  <include file="g1_fixed.xml"/>
+
+  <statistic center="0 0 0.8" extent="1.5"/>
+
+  <visual>
+    <headlight diffuse="0.6 0.6 0.6" ambient="0.3 0.3 0.3" specular="0 0 0"/>
+    <rgba haze="0.15 0.25 0.35 1"/>
+    <global azimuth="-130" elevation="-20"/>
+  </visual>
+
+  <worldbody>
+    <!-- flat ground warmup strips -->
+    <geom pos="1.5 0 0.04" type="box" size="0.1 1.5 0.04" quat="1.0 0 0 0"/>
+    <geom pos="2.0 0 0.04" type="box" size="0.15 1.5 0.04" quat="1.0 0 0 0"/>
+
+    <!-- stepping stones: increasing height -->
+    <geom pos="2.8 0 0.04" type="box" size="0.2 1.5 0.06" quat="1.0 0 0 0"/>
+    <geom pos="3.2 0 0.06" type="box" size="0.2 1.5 0.10" quat="1.0 0 0 0"/>
+    <geom pos="3.6 0 0.08" type="box" size="0.2 1.5 0.14" quat="1.0 0 0 0"/>
+    <geom pos="4.0 0 0.10" type="box" size="0.2 1.5 0.18" quat="1.0 0 0 0"/>
+  </worldbody>
+</mujoco>
