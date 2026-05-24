@@ -4,6 +4,10 @@ import torch
 from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
+from isaaclab.assets.articulation import Articulation
+from isaaclab.managers import SceneEntityCfg
+from isaaclab.terrains import TerrainImporter
+
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
 
@@ -61,3 +65,50 @@ def lin_vel_cmd_levels(
             ).tolist()
 
     return torch.tensor(ranges.lin_vel_x[1], device=env.device)
+
+
+def terrain_levels_vel(
+    env: ManagerBasedRLEnv,
+    env_ids: Sequence[int],
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+    upgrade_tile_ratio: float = 0.5,
+    grace_period_resets: int = 15,
+) -> torch.Tensor:
+    """地形等级课程：带升级保护期。
+
+    升级条件：行走距离 > 地块尺寸的一半（0.5 * 8m = 4m）
+    降级条件：行走距离 < 指令速度要求距离的 50%
+    保护期：升级后 15 个 episode 内禁止降级
+    """
+    asset: Articulation = env.scene[asset_cfg.name]
+    terrain: TerrainImporter = env.scene.terrain
+    command = env.command_manager.get_command("base_velocity")
+
+    distance = torch.norm(
+        asset.data.root_pos_w[env_ids, :2] - env.scene.env_origins[env_ids, :2], dim=1
+    )
+
+    tile_size = terrain.cfg.terrain_generator.size[0]
+    move_up = distance > tile_size * upgrade_tile_ratio
+
+    move_down = distance < torch.norm(command[env_ids, :2], dim=1) * env.max_episode_length_s * 0.5
+    move_down *= ~move_up
+
+    if not hasattr(env, "_curriculum_grace_counter"):
+        env._curriculum_grace_counter = torch.zeros(
+            env.num_envs, dtype=torch.long, device=env.device
+        )
+
+    upgraded_ids = env_ids[move_up]
+    if len(upgraded_ids) > 0:
+        env._curriculum_grace_counter[upgraded_ids] = grace_period_resets
+
+    env._curriculum_grace_counter[env_ids] = torch.clamp(
+        env._curriculum_grace_counter[env_ids] - 1, min=0
+    )
+
+    in_grace = env._curriculum_grace_counter[env_ids] > 0
+    move_down[in_grace] = False
+
+    terrain.update_env_origins(env_ids, move_up, move_down)
+    return torch.mean(terrain.terrain_levels.float())
