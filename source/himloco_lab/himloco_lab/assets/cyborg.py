@@ -84,7 +84,7 @@ CYBORG_BIPED_CFG = UnitreeArticulationCfg(
                 "J_knee_.*_pitch": 10.0,
             },
             armature={
-                ".*": 0.01,
+                ".*": 0.07001770124,
             },
         ),
         "feet": ImplicitActuatorCfg(
@@ -93,7 +93,7 @@ CYBORG_BIPED_CFG = UnitreeArticulationCfg(
             joint_names_expr=["J_ankle_.*_pitch", "J_ankle_.*_roll"],
             stiffness=80.0,
             damping=3.0,
-            armature=0.01,
+            armature=0.06581459643,
         ),
     },
 )
