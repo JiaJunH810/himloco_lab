@@ -354,7 +354,7 @@ class RewardsCfg:
         func=mdp.feet_air_time,
         weight=0.1,
         params={
-            "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_ankle_roll_link"),
+            "sensor_cfg": SceneEntityCfg("contact_forces", body_names="ankle_.*_roll_link"),
             "command_name": "base_velocity",
             "threshold": 0.5,
         },
